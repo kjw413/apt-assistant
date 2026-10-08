@@ -1,0 +1,43 @@
+.screen { width: 100%; max-width: 480px; min-width: 0; margin-inline: auto; padding: 12px; overflow-wrap: anywhere; }
+.screen h1 { font-size: 1.45rem; }
+.screen h2 { font-size: 1.15rem; }
+.screen h3 { margin: 0 0 8px; font-size: 1rem; }
+.section { min-width: 0; margin-block: 16px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+.actions > button { flex: 1 1 130px; min-height: 36px; }
+.list { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.list > li { min-width: 0; }
+.listButton { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 8px; }
+.muted { color: var(--muted); }
+.notice, .error { padding: 8px; border-radius: 4px; margin-block: 8px; }
+.notice { background: var(--warn-bg); color: var(--warn); }
+.error { background: var(--error-bg); color: var(--error); }
+.error ul { padding-left: 20px; margin-block: 4px; }
+.field { display: grid; gap: 8px; min-width: 0; margin-block: 12px; }
+.field textarea, .field input { width: 100%; }
+.field textarea { resize: vertical; }
+.field input[type='file'] { padding: 8px 4px; }
+.checkbox { display: flex; align-items: center; gap: 8px; margin-block: 12px; }
+.checkbox input { flex: 0 0 auto; }
+.summary { margin-block: 8px; }
+.table { width: 100%; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.table caption { text-align: left; margin-block: 4px; }
+.previewTable { margin-bottom: 12px; }
+.scoreCards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-block: 12px; }
+.scoreCard { display: flex; flex-direction: column; padding: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.scoreCard strong { font-size: 1.8rem; font-variant-numeric: tabular-nums; }
+.metrics { display: grid; gap: 8px; margin-block: 12px; }
+.metrics > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.metrics dt { color: var(--muted); }
+.metrics dd { margin: 0; font-variant-numeric: tabular-nums; }
+.sectionTable { display: block; }
+.sectionTable thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.sectionTable tbody { display: grid; gap: 12px; }
+.sectionTable tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
+.sectionTable tbody th { grid-column: 1 / -1; padding: 8px; }
+.sectionTable td { display: flex; flex-direction: column; min-width: 0; padding: 8px; border: 0; }
+.sectionTable td::before { content: attr(data-label); font-size: .85rem; color: var(--muted); }
+.section summary { cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+.questionTable { font-size: .85rem; }
+.questionTable th, .questionTable td { text-align: center; padding: 4px 1px; }
+.questionTable th button { width: 100%; padding: 4px 0; border: 0; background: transparent; font-weight: 600; }
