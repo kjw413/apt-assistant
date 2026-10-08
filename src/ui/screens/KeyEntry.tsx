@@ -37,7 +37,8 @@ function KeyEditor({ session, set }: { session: Session; set: ProblemSet }) {
       if (save) {
         await store.getState().saveKey(set.id, parsed.key);
         if (store.getState().saveError) return;
-        await store.getState().completeGrading(session.id);
+        if (session.status === 'graded') store.getState().go({ name: 'result', sessionId: session.id });
+        else await store.getState().completeGrading(session.id);
       } else await store.getState().gradeLater(session.id);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : '저장하지 못했습니다');
@@ -62,7 +63,7 @@ function KeyEditor({ session, set }: { session: Session; set: ProblemSet }) {
     {error && <p className={styles.error} role="alert">{error}</p>}
     <div className={styles.actions}>
       <button type="button" disabled={busy || parsed.errors.length > 0} onClick={() => { void finish(true); }}>채점 저장</button>
-      <button type="button" disabled={busy} onClick={() => { void finish(false); }}>나중에 채점</button>
+      {session.status !== 'graded' && <button type="button" disabled={busy} onClick={() => { void finish(false); }}>나중에 채점</button>}
     </div>
     <section className={styles.section} aria-label="채점 미리보기">
       <h2>미리보기</h2>

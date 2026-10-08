@@ -3,6 +3,10 @@
 export const SCHEMA_VERSION = 1;
 export const APP_VERSION = '0.1.0';
 
+export function isFutureDocument(document: { schemaVersion: number }): boolean {
+  return document.schemaVersion > SCHEMA_VERSION;
+}
+
 export type ToolName = 'calc' | 'memo' | 'paint';
 
 export interface SectionTools {

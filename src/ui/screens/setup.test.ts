@@ -1,7 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveProfile, validateProfileEdit } from '../../domain/profiles';
+import { effectiveProfile, makeSetLayout, validateProfileEdit } from '../../domain/profiles';
 import type { ProblemSet, SetupDraft } from '../../domain/types';
-import { buildSetupDraft, changeScope, initialSetup, parseProfileTime } from './setupLogic';
+import { buildSetupDraft, changeScope, compatibleSets, initialSetup, parseProfileTime } from './setupLogic';
+
+describe('compatibleSets', () => {
+  const profile = effectiveProfile('dcat', []);
+  const set = (id: string, layout: ProblemSet['layout'], profileId = 'dcat') => ({ id, layout, profileId } as ProblemSet);
+  const full = set('full', makeSetLayout(profile, 'full', {}));
+  const section = set('section', makeSetLayout(profile, 'section', { sectionIdx: 2 }));
+  const drill = set('drill', makeSetLayout(profile, 'drill', { sectionIdx: 2, drillCount: 5 }));
+  const free = set('free', makeSetLayout(profile, 'drill', { drillCount: 5 }));
+  const all = [full, section, drill, free, set('other', full.layout, 'lg-wayfit')];
+  it('full requires the same ordered section ids and counts', () => {
+    const wrongCount = set('wrong-count', full.layout.map((p, i) => ({ ...p, count: p.count + (i === 0 ? 1 : 0) })));
+    const reordered = set('reordered', [...full.layout].reverse());
+    expect(compatibleSets([...all, wrongCount, reordered], profile, 'full', null, 3)).toEqual([full]);
+  });
+  it('section requires exactly one part for the chosen section', () => {
+    expect(compatibleSets(all, profile, 'section', 2, 3)).toEqual([section, drill]);
+    expect(compatibleSets(all, profile, 'section', 0, 3)).toEqual([]);
+  });
+  it('drill requires a matching single part with enough questions', () => {
+    expect(compatibleSets(all, profile, 'drill', 2, 5)).toEqual([section, drill]);
+    expect(compatibleSets(all, profile, 'drill', 2, 6)).toEqual([section]);
+    expect(compatibleSets(all, profile, 'drill', null, 5)).toEqual([free]);
+    expect(compatibleSets(all, profile, 'drill', null, 6)).toEqual([]);
+  });
+});
 
 describe('프로필 시간 입력', () => {
   it.each([['7:30', 450], ['450', 450], [' 20:00 ', 1200], ['0:10', 10], ['180:00', 10800]])('%s → %i초', (input, seconds) => {

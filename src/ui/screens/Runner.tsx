@@ -16,7 +16,7 @@ const mouseOnly = {
   tabIndex: -1,
   onMouseDown: (event: MouseEvent<HTMLButtonElement>) => event.preventDefault(),
 };
-type Confirmation = { kind: 'end' | 'abandon'; idx: number; start: number | null };
+type Confirmation = { kind: 'end' | 'finish' | 'abandon'; idx: number; start: number | null };
 
 export function Runner(props: { sessionId: string }) {
   const { sessionId } = props;
@@ -144,6 +144,10 @@ export function Runner(props: { sessionId: string }) {
       store.getState().go({ name: 'home' });
       return;
     }
+    if (pending.kind === 'finish') {
+      await act({ type: 'finish' });
+      return;
+    }
     const current = store.getState().data.sessions.find(item => item.id === sessionId);
     if (!current) return;
     const currentPhase = phaseOf(current, Math.max(Date.now(), lastEventT(current)));
@@ -174,6 +178,8 @@ export function Runner(props: { sessionId: string }) {
         <div className={styles.breakHost}>
           <BreakScreen plan={plan} idx={idx} total={session.plan.length} rangeLabel={rangeLabel}
             autoStartAt={phase.autoStartAt} now={now} onStart={() => { void act({ type: 'startSection' }); }} />
+          <button {...mouseOnly} onClick={() => ask('finish')}>세션 종료</button>
+          <button {...mouseOnly} onClick={() => ask('abandon')}>중단</button>
         </div>
       ) : (
         <>
@@ -233,7 +239,9 @@ export function Runner(props: { sessionId: string }) {
       {notice && <div className={styles.notice} role="status">{notice}</div>}
       <div ref={dialogRef} className={styles.dialogHost} onMouseDown={event => event.preventDefault()}>
         <ConfirmDialog open={confirmation !== null}
-          title={confirmation?.kind === 'abandon' ? '세션을 중단할까요?' : isLast ? '세션을 끝낼까요?' : '영역을 끝낼까요?'}
+          title={confirmation?.kind === 'abandon' ? '세션을 중단할까요?'
+            : confirmation?.kind === 'finish' ? '남은 영역은 미응시로 기록하고 끝낼까요?'
+              : isLast ? '세션을 끝낼까요?' : '영역을 끝낼까요?'}
           confirmText="확인" onConfirm={() => { void confirm(); }} onCancel={() => setConfirmation(null)} />
       </div>
     </div>

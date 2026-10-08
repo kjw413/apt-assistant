@@ -93,6 +93,9 @@ export function Result({ sessionId }: { sessionId: string }) {
         </tr>)}</tbody>
       </table>
     </details>
-    <button type="button" onClick={() => go({ name: 'home' })}>홈으로</button>
+    <div className={styles.actions}>
+      <button type="button" onClick={() => go({ name: 'key', sessionId })}>정답 수정</button>
+      <button type="button" onClick={() => go({ name: 'home' })}>홈으로</button>
+    </div>
   </div>;
 }

@@ -1,6 +1,43 @@
 import { test, expect } from '@playwright/test';
 import { APP_URL, launch } from './helpers';
 
+test('정답 수정: 저장된 123을 124로 바꾸면 점수가 갱신되고 백업은 중복되지 않는다', async () => {
+  const { ctx, page } = await launch('flow-edit-key');
+  try {
+    const downloads: string[] = [];
+    page.on('download', d => downloads.push(d.suggestedFilename()));
+    await page.goto(APP_URL);
+    await page.getByRole('button', { name: '새 세션' }).click();
+    await page.getByLabel('범위').selectOption('drill');
+    await page.getByLabel('영역').selectOption({ label: '언어논리' });
+    await page.getByLabel('문항 수').fill('3');
+    await page.getByLabel('모드').selectOption('soft');
+    await page.getByRole('button', { name: '시작', exact: true }).click();
+    await page.getByRole('button', { name: '시작', exact: true }).click();
+    await page.getByTestId('bubble-0-1').click();
+    await page.getByTestId('bubble-1-2').click();
+    await page.getByTestId('bubble-2-4').click();
+    await page.getByRole('button', { name: '종료' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: '확인' }).click();
+    await page.getByLabel('정답').fill('123');
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: '채점 저장' }).click();
+    await download;
+    await expect(page.getByTestId('score-total')).toHaveText('2/3');
+    await page.getByRole('button', { name: '정답 수정' }).click();
+    await expect(page.getByLabel('정답')).toHaveValue('123');
+    await expect(page.getByRole('button', { name: '나중에 채점' })).toHaveCount(0);
+    await page.getByLabel('정답').fill('124');
+    await page.getByRole('button', { name: '채점 저장' }).click();
+    await expect(page.getByTestId('score-total')).toHaveText('3/3');
+    await expect(page.getByTestId('score-inlimit')).toHaveText('3/3');
+    await page.reload();
+    await page.getByRole('button', { name: /시간 내 3\/3 · 전체 3\/3/ }).click();
+    await expect(page.getByTestId('score-total')).toHaveText('3/3');
+    expect(downloads).toHaveLength(1);
+  } finally { await ctx.close(); }
+});
+
 test('드릴 종료 → 정답 입력 → 결과(시간 내/전체) → 백업 다운로드', async () => {
   const { ctx, page } = await launch('flow-grade');
   await page.goto(APP_URL);
@@ -41,6 +78,22 @@ test('외부 모의: 쉬는 시간 없이 시작, 영역 카드, 종료 뒤 요�
     if (i < 4) await page.getByRole('button', { name: '시작', exact: true }).click();
   }
   await expect(page.getByRole('button', { name: '확인' })).toBeVisible();
+  await ctx.close();
+});
+
+test('전체 DCAT 연습: 쉬는 시간에 세션을 끝내면 정답 입력으로 간다', async () => {
+  const { ctx, page } = await launch('flow-break-finish');
+  await page.goto(APP_URL);
+  await page.getByRole('button', { name: '새 세션' }).click();
+  await page.getByLabel('범위').selectOption('full');
+  await page.getByLabel('모드').selectOption('soft');
+  await page.getByRole('button', { name: '시작', exact: true }).click();
+  await page.getByRole('button', { name: '시작', exact: true }).click();
+  await page.getByRole('button', { name: '종료' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '확인' }).click();
+  await page.getByRole('button', { name: '세션 종료' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '확인' }).click();
+  await expect(page.getByLabel('정답')).toBeVisible();
   await ctx.close();
 });
 

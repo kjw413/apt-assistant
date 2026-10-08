@@ -4,6 +4,7 @@ import { createAppStore } from './store';
 import { AptDb } from '../data/db';
 import { createDexieRepo, type Repo } from '../data/repo';
 import type { SetupDraft } from '../domain/types';
+import { buildBackup } from '../domain/backup';
 
 let n = 0;
 function setup(lock: 'acquired' | 'busy' | 'unsupported' = 'acquired', repo?: Repo) {
@@ -21,6 +22,106 @@ const draft = (o: Partial<SetupDraft> = {}): SetupDraft => ({
 });
 
 describe('store', () => {
+  it('boot failure exposes bootError, blocks writes and can retry with the held lock', async () => {
+    const repo = createDexieRepo(new AptDb(`store-test-${++n}`));
+    let loads = 0;
+    let locks = 0;
+    const unreliable = { ...repo, loadAll: async () => {
+      if (++loads === 1) throw new Error('DB temporarily unavailable');
+      return repo.loadAll();
+    } };
+    const store = createAppStore({
+      repo: unreliable, now: () => 1_000_000, download: () => {},
+      acquireLock: async () => ++locks === 1 ? 'acquired' : 'busy',
+    });
+    await store.getState().boot();
+    expect(store.getState().bootError).toBe('DB temporarily unavailable');
+    expect(store.getState().ready).toBe(false);
+    expect(await store.getState().startSession(draft())).toBeNull();
+    await store.getState().act('missing', { type: 'finish' });
+    await store.getState().saveSettings({ sound: false });
+    store.getState().setMemo('missing', 'must not save');
+    expect((await repo.loadAll()).data.sessions).toEqual([]);
+    expect((await repo.loadAll()).data.settings.sound).toBe(true);
+    expect((await repo.loadAll()).data.memos).toEqual({});
+    await store.getState().boot();
+    expect(store.getState().ready).toBe(true);
+    expect(store.getState().bootError).toBeNull();
+    expect(store.getState().screen).toEqual({ name: 'home' });
+    expect(locks).toBe(1);
+    expect(loads).toBe(2);
+  });
+  it('future-schema in_progress session stays unchanged after boot, tick and act', async () => {
+    const source = setup();
+    await source.store.getState().boot();
+    const id = (await source.store.getState().startSession(draft({ scope: 'full', policy: 'hard' })))!;
+    await source.store.getState().act(id, { type: 'startSection' });
+    const future = { ...source.store.getState().data.sessions[0], schemaVersion: 2 };
+    await source.repo.saveSession(future);
+    await source.repo.saveAlive(id, 1_000_000);
+    const target = setup('acquired', source.repo);
+    target.setNow(10_000_000);
+    await target.store.getState().boot();
+    expect((await target.repo.loadAll()).data.sessions[0]).toEqual(future);
+    expect(target.store.getState().screen).toEqual({ name: 'home' });
+    await target.store.getState().tick();
+    await target.store.getState().act(id, { type: 'abandon' });
+    expect((await target.repo.loadAll()).data.sessions[0]).toEqual(future);
+    for (const name of ['runner', 'key'] as const) {
+      target.store.getState().go({ name, sessionId: id });
+      expect(target.store.getState().screen).toEqual({ name: 'home' });
+      expect(target.store.getState().toast).toBe('새 버전 데이터는 열 수 없습니다');
+    }
+  });
+  it('restore recovers a closed gap without auto-starting later sections', async () => {
+    const source = setup();
+    await source.store.getState().boot();
+    const id = (await source.store.getState().startSession(draft({ scope: 'full', policy: 'hard', sectionIdx: null })))!;
+    await source.store.getState().act(id, { type: 'startSection' });
+    source.setNow(1_060_000);
+    await source.store.getState().act(id, { type: 'answer', q: 0, c: 1 });
+    const backup = JSON.stringify(buildBackup(source.store.getState().data, 1_060_000));
+    const target = setup();
+    target.setNow(10_000_000);
+    await target.store.getState().boot();
+    expect(await target.store.getState().restore(backup)).toEqual({ ok: true });
+    await target.store.getState().tick();
+    const restored = (await target.repo.loadAll()).data.sessions[0];
+    expect(restored.events.filter(e => e.k === 'sectionEnd')).toEqual([
+      { t: 2_200_000, k: 'sectionEnd', s: 0, reason: 'deadline' },
+    ]);
+    expect(restored.events.filter(e => e.k === 'sectionStart')).toHaveLength(1);
+    expect(restored.events).toContainEqual({ t: 10_000_000, k: 'gap', from: 1_060_000, to: 10_000_000, cause: 'closed' });
+    expect(restored.status).toBe('in_progress');
+    expect(target.store.getState().screen).toEqual({ name: 'runner', sessionId: id });
+  });
+  it('restore rejects incomplete backup and leaves existing data intact', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft()))!;
+    await t.store.getState().act(id, { type: 'abandon' });
+    const before = await t.repo.loadAll();
+    expect(await t.store.getState().restore('{"format":"apt-backup","schemaVersion":1,"data":{}}'))
+      .toEqual({ ok: false, reason: '백업 데이터가 올바르지 않습니다' });
+    expect(await t.repo.loadAll()).toEqual(before);
+    expect(t.downloads).toEqual([]);
+  });
+  it.each([
+    { scope: 'full' as const, sectionIdx: null },
+    { scope: 'section' as const, sectionIdx: 0 },
+    { scope: 'drill' as const, sectionIdx: 0 },
+    { scope: 'drill' as const, sectionIdx: 2, drillCount: 4 },
+  ])('incompatible existing set is refused for %j', async overrides => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft()))!;
+    const setId = t.store.getState().data.sessions[0].setId!;
+    await t.store.getState().act(id, { type: 'abandon' });
+    const before = (await t.repo.loadAll()).data;
+    expect(await t.store.getState().startSession(draft({ ...overrides, setId }))).toBeNull();
+    expect(t.store.getState().toast).toBe('선택한 세트가 이 범위와 맞지 않습니다');
+    expect((await t.repo.loadAll()).data).toEqual(before);
+  });
   it('빈 DB 부팅 → 홈', async () => {
     const { store } = setup();
     await store.getState().boot();

@@ -4,14 +4,15 @@ import { backupFileName, buildBackup, emptyAllData, normalizeAllData, validateBa
 import { lastEventT } from '../domain/events';
 import { defaultDrillSeconds, effectiveProfile, makePlan, makeSetLayout, validateProfileEdit } from '../domain/profiles';
 import { advance, catchUpAfterGap, createSession, isGap, reduce, type SessionAction } from '../domain/session';
-import { SCHEMA_VERSION, type AllData, type ExamProfile, type ProblemSet, type Session, type Settings, type SetupDraft } from '../domain/types';
+import { isFutureDocument, SCHEMA_VERSION, type AllData, type ExamProfile, type ProblemSet, type Session, type Settings, type SetupDraft } from '../domain/types';
+import { compatibleSets } from '../ui/screens/setupLogic';
 
 export type Screen =
   | { name: 'home' } | { name: 'setup' } | { name: 'settings' } | { name: 'blocked' }
   | { name: 'runner'; sessionId: string } | { name: 'key'; sessionId: string }
   | { name: 'result'; sessionId: string } | { name: 'externalSummary'; sessionId: string };
 export interface AppState {
-  ready: boolean; screen: Screen; data: AllData; meta: Meta;
+  ready: boolean; bootError: string | null; screen: Screen; data: AllData; meta: Meta;
   lockWarning: boolean; persisted: boolean | null; saveError: string | null; toast: string | null;
 }
 export interface AppActions {
@@ -40,7 +41,7 @@ export interface Deps {
 
 function activeSession(data: AllData): Session | undefined {
   return data.sessions.reduce<Session | undefined>((latest, s) =>
-    s.status === 'in_progress' && (!latest || s.createdAt > latest.createdAt) ? s : latest, undefined);
+    !isFutureDocument(s) && s.status === 'in_progress' && (!latest || s.createdAt > latest.createdAt) ? s : latest, undefined);
 }
 
 function sessionScreen(s: Session): Screen {
@@ -73,6 +74,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
   let starting = false;
   let restoring = false;
   let booting: Promise<void> | null = null;
+  let heldLock: 'acquired' | 'unsupported' | null = null;
   let lastTickAt: number | null = null;
   let lastAliveAt: number | null = null;
   let saveQueue: Promise<void> = Promise.resolve();
@@ -136,6 +138,26 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       if (before.status !== after.status) set({ screen: sessionScreen(after) });
     }
 
+    async function recoverActive(data: AllData, alive: Record<string, number>, now: number): Promise<void> {
+      const s = activeSession(data);
+      lastTickAt = now;
+      lastAliveAt = s ? (alive[s.id] ?? now) : null;
+      if (!s) {
+        set({ screen: { name: 'home' } });
+        return;
+      }
+      const lastSeen = alive[s.id] ?? lastEventT(s);
+      const gap = isGap(lastSeen, now);
+      const caughtUp = gap ? catchUpAfterGap(s, lastSeen, now, 'closed') : s;
+      if (gap) set({ toast: '창이 닫힌 동안의 공백을 반영했습니다' });
+      const next = advance(caughtUp, now);
+      if (next !== s) {
+        updateSession(next);
+        if (!await save(sessionWrite(s.id))) throw new Error(get().saveError ?? '세션 복구를 저장하지 못했습니다');
+      }
+      set({ screen: sessionScreen(next) });
+    }
+
     function memoWrite(id: string): [string, Write] {
       const timer = memoTimers.get(id);
       if (timer !== undefined) clearTimeout(timer);
@@ -174,51 +196,44 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
     }
 
     return {
-      ready: false, screen: { name: 'home' }, data: emptyAllData(), meta: { lastBackupAt: null },
+      ready: false, bootError: null, screen: { name: 'home' }, data: emptyAllData(), meta: { lastBackupAt: null },
       lockWarning: false, persisted: null, saveError: null, toast: null,
 
       boot() {
         if (booting) return booting;
+        if (get().ready) return Promise.resolve();
+        set({ bootError: null });
         booting = (async () => {
           try {
-            const lock = await deps.acquireLock();
+            const lock = heldLock ?? await deps.acquireLock();
             if (lock === 'busy') {
               blocked = true;
               set({ ready: true, screen: { name: 'blocked' } });
               return;
             }
+            heldLock = lock;
             set({ lockWarning: lock === 'unsupported' });
             const persisted = await repo.requestPersist();
             set({ persisted });
             const loaded = await repo.loadAll();
             const data = normalizeAllData(loaded.data);
             set({ data, meta: { ...loaded.meta } });
-            const s = activeSession(data);
-            const now = deps.now();
-            lastTickAt = now;
-            lastAliveAt = s ? (loaded.alive[s.id] ?? now) : null;
-            if (s) {
-              const lastSeen = loaded.alive[s.id] ?? lastEventT(s);
-              const gap = isGap(lastSeen, now);
-              const caughtUp = gap ? catchUpAfterGap(s, lastSeen, now, 'closed') : s;
-              if (gap) set({ toast: '창이 닫힌 동안의 공백을 반영했습니다' });
-              const next = advance(caughtUp, now);
-              if (next !== s) {
-                updateSession(next);
-                await save(sessionWrite(s.id));
-              }
-              set({ screen: sessionScreen(next) });
-            } else set({ screen: { name: 'home' } });
+            await recoverActive(data, loaded.alive, deps.now());
             set({ ready: true });
           } catch (error) {
-            set({ saveError: errorMessage(error) });
-            throw error;
+            set({ bootError: errorMessage(error), ready: false });
+          } finally {
+            booting = null;
           }
         })();
         return booting;
       },
 
       go(screen) {
+        if ('sessionId' in screen && get().data.sessions.some(s => s.id === screen.sessionId && isFutureDocument(s))) {
+          set({ toast: '새 버전 데이터는 열 수 없습니다' });
+          return;
+        }
         if (!writable() || (activeSession(get().data) && screen.name !== 'runner')) return;
         set({ screen });
       },
@@ -229,6 +244,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
         try {
           const now = deps.now();
           const profile = effectiveProfile(draft.profileId, get().data.profiles);
+          if (isFutureDocument(profile)) return null;
           const external = draft.mode === 'external';
           const scope = external ? 'full' : draft.scope;
           let problemSet: ProblemSet | null = null;
@@ -237,6 +253,11 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
             if (draft.setId) {
               problemSet = get().data.sets.find(s => s.id === draft.setId) ?? null;
               if (!problemSet) throw new Error('문제 세트를 찾을 수 없습니다');
+              if (isFutureDocument(problemSet)) return null;
+              if (!compatibleSets([problemSet], profile, scope, draft.sectionIdx, draft.drillCount).length) {
+                set({ toast: '선택한 세트가 이 범위와 맞지 않습니다' });
+                return null;
+              }
             } else {
               problemSet = {
                 id: newId(), name: draft.newSetName.trim() || `${scope === 'drill' ? '드릴' : profile.name} ${localDateTime(now)}`,
@@ -284,7 +305,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       async act(id, action) {
         if (!writable()) return;
         const s = get().data.sessions.find(s => s.id === id);
-        if (!s) return;
+        if (!s || isFutureDocument(s)) return;
         const { session, notice } = reduce(s, action, deps.now());
         if (session !== s) {
           updateSession(session);
@@ -320,6 +341,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
 
       setMemo(id, text) {
         if (!writable()) return;
+        if (get().data.sessions.some(s => s.id === id && isFutureDocument(s))) return;
         set(state => ({ data: { ...state.data, memos: { ...state.data.memos, [id]: text } } }));
         const timer = memoTimers.get(id);
         if (timer !== undefined) clearTimeout(timer);
@@ -334,7 +356,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       async saveKey(id, key) {
         if (!writable()) return;
         const original = get().data.sets.find(s => s.id === id);
-        if (!original) return;
+        if (!original || isFutureDocument(original)) return;
         const updated = { ...original, key: [...key], updatedAt: deps.now() };
         set(state => ({ data: { ...state.data, sets: state.data.sets.map(s => s.id === id ? updated : s) } }));
         await save(setWrite(id));
@@ -343,7 +365,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       async completeGrading(id) {
         if (!writable()) return;
         const s = get().data.sessions.find(s => s.id === id);
-        if (!s || (s.status !== 'awaiting_key' && s.status !== 'graded')) return;
+        if (!s || isFutureDocument(s) || (s.status !== 'awaiting_key' && s.status !== 'graded')) return;
         updateSession({ ...s, status: 'graded' });
         if (!await save(sessionWrite(id))) return;
         await autoBackup(id);
@@ -351,12 +373,14 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       },
 
       async gradeLater(id) {
+        if (get().data.sessions.some(s => s.id === id && isFutureDocument(s))) return;
         if (!writable() || get().data.sessions.find(s => s.id === id)?.status !== 'awaiting_key') return;
         await autoBackup(id);
         set({ screen: { name: 'home' } });
       },
 
       async confirmExternal(id) {
+        if (get().data.sessions.some(s => s.id === id && isFutureDocument(s))) return;
         if (!writable() || get().data.sessions.find(s => s.id === id)?.status !== 'external_done') return;
         await autoBackup(id);
         set({ screen: { name: 'home' } });
@@ -364,6 +388,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
 
       async saveProfile(p) {
         if (!writable()) return { ok: false, errors: [] };
+        if (isFutureDocument(p) || get().data.profiles.some(x => x.id === p.id && isFutureDocument(x))) return { ok: false, errors: [] };
         const validation = validateProfileEdit(p);
         if (!validation.ok) return validation;
         const original = get().data.profiles.find(x => x.id === p.id);
@@ -376,6 +401,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
 
       async resetProfile(id) {
         if (!writable()) return;
+        if (get().data.profiles.some(p => p.id === id && isFutureDocument(p))) return;
         set(state => ({ data: { ...state.data, profiles: state.data.profiles.filter(p => p.id !== id) } }));
         await save(profileWrite(id));
       },
@@ -409,14 +435,11 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
           const loaded = await repo.loadAll();
           const data = normalizeAllData(loaded.data);
           const now = deps.now();
-          const active = activeSession(data);
           set(state => ({
             data, meta: { ...state.meta, ...loaded.meta, lastBackupAt: now },
-            screen: active ? sessionScreen(active) : { name: 'home' },
           }));
           backupConfirmations.clear();
-          lastTickAt = null;
-          lastAliveAt = null;
+          await recoverActive(data, loaded.alive, now);
           if (!await save(['meta', () => repo.saveMeta(get().meta)])) return { ok: false, reason: get().saveError ?? undefined };
           return { ok: true };
         } catch (error) {

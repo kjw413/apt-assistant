@@ -64,9 +64,26 @@ export function validateBackup(
   const data = x.data;
   if (!isPlainObject(data)) return { ok: false, reason: REASON_DATA };
   for (const k of ARRAY_KEYS) {
-    if (data[k] !== undefined && !Array.isArray(data[k])) return { ok: false, reason: REASON_DATA };
+    if (!Array.isArray(data[k])) return { ok: false, reason: REASON_DATA };
   }
-  if (data.memos !== undefined && !isPlainObject(data.memos)) return { ok: false, reason: REASON_DATA };
+  if (!isPlainObject(data.memos) || !isPlainObject(data.settings)) return { ok: false, reason: REASON_DATA };
+  // The loop above establishes these are arrays; retain that runtime validation while
+  // giving TypeScript the element type needed for their structural checks.
+  const profiles = data.profiles as unknown[];
+  const sets = data.sets as unknown[];
+  const sessions = data.sessions as unknown[];
+  if (!profiles.every((profile) =>
+    isPlainObject(profile) && typeof profile.id === 'string' && Array.isArray(profile.sections)
+  )) return { ok: false, reason: REASON_DATA };
+  if (!sets.every((set) =>
+    isPlainObject(set) && typeof set.id === 'string' && Array.isArray(set.layout)
+  )) return { ok: false, reason: REASON_DATA };
+  if (!sessions.every((session) =>
+    isPlainObject(session)
+      && typeof session.id === 'string'
+      && Array.isArray(session.plan)
+      && Array.isArray(session.events)
+  )) return { ok: false, reason: REASON_DATA };
   return { ok: true, file: migrate(x as unknown as BackupFile) };
 }
 

@@ -139,7 +139,13 @@ export function press(s: CalcState, k: CalcKey): CalcState {
     if (isDigit(k) || k === '00' || k === '.') return press(CALC_INITIAL, k);
     return s; // 오류 중 연산자·=·√ 무시
   }
-  if (isDigit(k) || k === '00') return inputDigits(s, k);
+  // '=' 직후 숫자/소수점 입력은 새 계산을 시작한다. 반복 '=' 메모리도 버린다.
+  if (isDigit(k) || k === '00' || k === '.') {
+    if (!s.entering && s.op === null && s.lastOp !== null) {
+      return press(CALC_INITIAL, k);
+    }
+    if (isDigit(k) || k === '00') return inputDigits(s, k);
+  }
   switch (k) {
     case '.': return inputDot(s);
     case 'BS': return backspace(s);

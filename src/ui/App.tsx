@@ -35,10 +35,18 @@ class ErrorBoundary extends Component<
 function AppContent() {
   const screen = useApp(s => s.screen);
   const ready = useApp(s => s.ready);
+  const bootError = useApp(s => s.bootError);
+  const boot = useApp(s => s.boot);
+  const toast = useApp(s => s.toast);
   const lockWarning = useApp(s => s.lockWarning);
   const saveError = useApp(s => s.saveError);
   const exportNow = useApp(s => s.exportNow);
 
+  if (bootError !== null) return <div className="screen" role="alert">
+    <p>{bootError}</p>
+    <button type="button" onClick={() => { void boot(); }}>다시 시도</button>{' '}
+    <button type="button" onClick={() => location.reload()}>새로고침</button>
+  </div>;
   if (!ready) return <div className="screen">불러오는 중…</div>;
   if (screen.name === 'blocked') {
     return <div className="screen">다른 창에서 열려 있습니다. 이 창을 닫으세요.</div>;
@@ -57,6 +65,7 @@ function AppContent() {
 
   return (
     <>
+      {toast && <div className="banner banner--warn" role="status">{toast}</div>}
       {lockWarning && (
         <div className="banner banner--warn" role="status">
           창 잠금을 쓸 수 없어 두 창을 동시에 열면 기록이 덮어써질 수 있습니다

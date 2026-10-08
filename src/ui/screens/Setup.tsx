@@ -2,7 +2,7 @@ import { useId, useRef, useState } from 'react';
 import { BUILTIN_PROFILES, defaultDrillSeconds, effectiveProfile, formatTimesSummary } from '../../domain/profiles';
 import { useApp } from '../useApp';
 import { ProfileEditor } from './ProfileEditor';
-import { buildSetupDraft, changeScope, initialSetup, parseSeconds, type SetupValues } from './setupLogic';
+import { buildSetupDraft, changeScope, compatibleSets, initialSetup, parseSeconds, type SetupValues } from './setupLogic';
 import styles from './setup.module.css';
 
 export function Setup() {
@@ -21,13 +21,14 @@ export function Setup() {
   const id = useId();
   const profile = effectiveProfile(values.profileId, profiles);
   const profileOptions = BUILTIN_PROFILES.map(p => effectiveProfile(p.id, profiles));
-  const profileSets = sets.filter(s => s.profileId === profile.id).sort((a, b) => b.updatedAt - a.updatedAt);
-  const selectedSet = profileSets.find(s => s.id === values.setId);
   const external = values.scope === 'external';
   const drill = values.scope === 'drill';
   const sectionIdx = values.sectionIdx !== null && profile.sections[values.sectionIdx]
     ? values.sectionIdx : values.scope === 'section' ? 0 : null;
   const count = parseSeconds(values.drillCount);
+  const profileSets = compatibleSets(sets, profile, values.scope === 'external' ? 'full' : values.scope, sectionIdx, count)
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const selectedSet = profileSets.find(s => s.id === values.setId);
   const autoSeconds = defaultDrillSeconds(profile, sectionIdx, Number.isSafeInteger(count) && count > 0 ? count : 10);
 
   function update<K extends keyof SetupValues>(key: K, value: SetupValues[K]) {

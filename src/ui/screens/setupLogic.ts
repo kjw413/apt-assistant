@@ -1,5 +1,19 @@
 import { BUILTIN_PROFILES, effectiveProfile } from '../../domain/profiles';
-import type { ExamProfile, ProblemSet, SetupDraft } from '../../domain/types';
+import type { ExamProfile, ProblemSet, SessionScope, SetupDraft } from '../../domain/types';
+
+export function compatibleSets(
+  sets: ProblemSet[], profile: ExamProfile, scope: SessionScope, sectionIdx: number | null, drillCount: number,
+): ProblemSet[] {
+  const sectionId = sectionIdx === null ? null : profile.sections[sectionIdx]?.id;
+  return sets.filter(set => {
+    if (set.profileId !== profile.id) return false;
+    if (scope === 'full') return set.layout.length === profile.sections.length && set.layout.every((part, i) =>
+      part.sectionId === profile.sections[i].id && part.count === profile.sections[i].questions);
+    if (scope === 'section' && sectionId == null) return false;
+    return set.layout.length === 1 && set.layout[0].sectionId === sectionId
+      && (scope !== 'drill' || set.layout[0].count >= drillCount);
+  });
+}
 
 export interface SetupValues extends Omit<SetupDraft, 'scope' | 'mode' | 'drillCount' | 'drillSeconds' | 'startNo' | 'setId'> {
   scope: SetupDraft['scope'] | 'external';

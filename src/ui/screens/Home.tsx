@@ -1,5 +1,6 @@
 import { questionViews } from '../../domain/derive';
 import { summarize } from '../../domain/grading';
+import { isFutureDocument } from '../../domain/types';
 import { unbackedCount } from '../../state/store';
 import { formatDateTime } from '../format';
 import { useApp } from '../useApp';
@@ -13,11 +14,13 @@ export function Home() {
   const exportNow = useApp(s => s.exportNow);
   const lastSetup = data.settings.lastSetup;
   const sets = new Map(data.sets.map(set => [set.id, set]));
-  const waiting = data.sessions.filter(s => s.status === 'awaiting_key');
+  const readable = data.sessions.filter(s => !isFutureDocument(s));
+  const future = data.sessions.filter(isFutureDocument);
+  const waiting = readable.filter(s => s.status === 'awaiting_key');
   const recentFirst = (a: typeof data.sessions[number], b: typeof data.sessions[number]) =>
     (b.finishedAt ?? b.createdAt) - (a.finishedAt ?? a.createdAt);
-  const results = data.sessions.filter(s => s.status === 'graded').sort(recentFirst).slice(0, 5);
-  const external = data.sessions.filter(s => s.status === 'external_done').sort(recentFirst);
+  const results = readable.filter(s => s.status === 'graded').sort(recentFirst).slice(0, 5);
+  const external = readable.filter(s => s.status === 'external_done').sort(recentFirst);
 
   return <main className={styles.screen}>
     <h1>APT 연습</h1>
@@ -29,6 +32,15 @@ export function Home() {
     </div>
     <p className={styles.muted}>저장된 세션 {data.sessions.length}개</p>
     <p data-testid="unbacked" className={styles.summary}>미백업 {unbackedCount(data, meta)}</p>
+    {future.length > 0 && <section className={styles.section}>
+      <h2>새 버전 세션</h2>
+      <ul className={styles.list}>{future.map(s => <li key={s.id}>
+        <button type="button" className={styles.listButton} onClick={() => go({ name: 'runner', sessionId: s.id })}>
+          <span>{sets.get(s.setId ?? '')?.name ?? s.label ?? s.id}</span>
+          <span className="banner banner--warn">새 버전 데이터</span>
+        </button>
+      </li>)}</ul>
+    </section>}
     {data.sessions.length === 0 && data.sets.length === 0 &&
       <p className={styles.muted}>기록이 없으면 설정에서 백업 파일을 복원할 수 있습니다</p>}
     <section className={styles.section}>
