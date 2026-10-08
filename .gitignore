@@ -1,0 +1,7 @@
+node_modules/
+dist/
+app/
+e2e/.profile-test/
+test-results/
+playwright-report/
+.superpowers/
