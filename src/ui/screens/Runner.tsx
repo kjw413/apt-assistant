@@ -203,7 +203,6 @@ export function Runner(props: { sessionId: string }) {
             <section className={styles.external} data-testid="external-card">
               <h2>{plan.name}</h2><p>{plan.qFrom + 1}–{plan.qTo + 1}번</p>
               <div className={`${styles.bigClock} ${clockClass}`}>{clock}</div>
-              <button {...mouseOnly} onClick={() => ask('end')}>{isLast ? '종료' : '다음 영역'}</button>
             </section>
           ) : (
             <div ref={rowsRef} className={`${styles.rows} ${allLocked ? styles.expandedRows : ''}`} aria-label="답안 마킹">
