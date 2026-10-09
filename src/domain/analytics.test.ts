@@ -29,6 +29,45 @@ function toolData(): AllData {
 }
 
 describe('toCells와 aggregate', () => {
+  it('four timed questions retain timedN=4, time sum and median with one unknown key', () => {
+    const data = toolData();
+    data.sets[0].ranges = [{ from: 0, to: 3, familyId: 'timed' }];
+    data.sets[0].key![1] = null;
+    data.sessions[0].events = [
+      { k: 'sectionStart', s: 0, t: 0 },
+      { k: 'answer', q: 0, c: 1, t: 10_000 },
+      { k: 'answer', q: 1, c: 1, t: 30_000 },
+      { k: 'answer', q: 2, c: 1, t: 60_000 },
+      { k: 'answer', q: 3, c: 1, t: 100_000 },
+      { k: 'sectionEnd', s: 0, reason: 'manual', t: 100_000 },
+    ];
+    const row = () => aggregate(toCells(data), 'family', filter).find(r => r.id === 'timed')!;
+    expect(row()).toMatchObject({ timedN: 4, timeSec: 100, medianSec: 25,
+      n: 3, correct: 3, answeredN: 3, inLimitN: 3, guessedN: 3 });
+    data.sets[0].key = Array(75).fill(null);
+    expect(row()).toMatchObject({ timedN: 4, timeSec: 100, medianSec: 25, n: 0, p: null });
+  });
+  it('a full OMR session finished after section 1 scores 20/20 and preserves whole-set family frequency', () => {
+    const data = toolData();
+    data.sets[0].ranges = [{ from: 0, to: 9, familyId: 'first-family' },
+      { from: 10, to: 74, familyId: 'shared-family' }];
+    const session = data.sessions[0];
+    session.events = [{ k: 'sectionStart', s: 0, t: 0 }];
+    for (let q = 0; q < 20; q++) session.events.push({ k: 'answer', q, c: 1, t: (q + 1) * 1_000 });
+    session.events.push({ k: 'sectionEnd', s: 0, reason: 'manual', t: 20_000 });
+    session.finishedAt = 20_000;
+    const cells = toCells(data);
+    const sections = aggregate(cells, 'section', filter);
+    expect(sections.reduce((sum, row) => sum + row.n, 0)).toBe(20);
+    expect(sections.reduce((sum, row) => sum + row.correct, 0)).toBe(20);
+    expect(cells.filter(c => c.sectionId !== 'verbal-logic').every(c =>
+      c.n === 0 && c.correct === 0 && c.answered === 0 && c.inLimitCorrect === 0
+      && c.guessedCorrect === 0 && c.timedN === 0 && c.timeSec === null && c.times.length === 0)).toBe(true);
+    expect(cells.reduce((sum, cell) => sum + cell.questionN, 0)).toBe(75);
+    const families = familyRows(cells, filter);
+    expect(families.find(r => r.familyId === 'first-family')!.w).toBeCloseTo(10 / 75);
+    expect(families.find(r => r.familyId === 'shared-family')!.w).toBeCloseTo(65 / 75);
+  });
   it('시드 행을 외부 초과 셀로 만들고 알 수 없는 응답·시간은 null로 둔다', () => {
     const cells = toCells(seedData());
     expect(cells).toHaveLength(42);
@@ -53,10 +92,10 @@ describe('toCells와 aggregate', () => {
   });
   it('칠하지 않은 문항은 미분류 집계, 기본 가족은 빈 범위를 채우며 미분류는 판정 제외', () => {
     const data = toolData();
-    expect(aggregate(toCells(data), 'family', filter).find(r => r.id === '미분류')!.n).toBe(73);
+    expect(aggregate(toCells(data), 'family', filter).find(r => r.id === '미분류')!.n).toBe(18);
     expect(Object.values(verdicts(toCells(data), filter)).flat().some(r => r.familyId === '미분류')).toBe(false);
     data.sets[0].defaultFamilyId = '단문독해';
-    expect(aggregate(toCells(data), 'family', filter).find(r => r.id === '단문독해')!.n).toBe(73);
+    expect(aggregate(toCells(data), 'family', filter).find(r => r.id === '단문독해')!.n).toBe(18);
   });
   it('graded+세트만 포함하고 프로필·첫 풀이 필터와 scope 조건을 적용한다', () => {
     const data = toolData();
@@ -187,8 +226,11 @@ describe('수축·비중·가족 판정', () => {
   });
   it('시간 n<4이면 시간 판정을 내지 않고 감점 있는 프로필에는 찍기를 권하지 않는다', () => {
     const data = timedData();
-    data.sets[0].key![0] = null;
-    data.sets[0].key![4] = null;
+    // Gaps invalidate these laps independently of answer-key availability.
+    const s = data.sessions[0];
+    const t = s.events.at(-1)!.t;
+    s.events.push({ k: 'gap', from: 0, to: 1, cause: 'closed', t },
+      { k: 'gap', from: 480_000, to: 480_001, cause: 'closed', t });
     const p = effectiveProfile('dcat', []);
     p.penalty.enabled = true;
     data.profiles = [p];

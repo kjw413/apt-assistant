@@ -4,7 +4,7 @@ import { createAppStore } from './store';
 import { AptDb } from '../data/db';
 import { createDexieRepo, type Repo } from '../data/repo';
 import type { SetupDraft } from '../domain/types';
-import { buildBackup } from '../domain/backup';
+import { buildBackup, emptyAllData } from '../domain/backup';
 import { buildDcatTemplate, buildSeedTaxonomy } from '../domain/seed';
 import { questionViews } from '../domain/derive';
 import { summarize } from '../domain/grading';
@@ -15,10 +15,11 @@ function setup(lock: 'acquired' | 'busy' | 'unsupported' = 'acquired', repo?: Re
   const r = repo ?? createDexieRepo(new AptDb(`store-test-${++n}`));
   let now = 1_000_000;
   const downloads: string[] = [];
+  const backupTexts: string[] = [];
   const store = createAppStore({
-    repo: r, now: () => now, download: name => downloads.push(name), acquireLock: async () => lock,
+    repo: r, now: () => now, download: (name, text) => { downloads.push(name); backupTexts.push(text); }, acquireLock: async () => lock,
   });
-  return { store, repo: r, downloads, setNow: (t: number) => { now = t; } };
+  return { store, repo: r, downloads, backupTexts, setNow: (t: number) => { now = t; } };
 }
 const draft = (o: Partial<SetupDraft> = {}): SetupDraft => ({
   profileId: 'dcat', scope: 'drill', mode: 'omr', policy: 'soft', sectionIdx: 2, drillCount: 3, drillSeconds: 180,
@@ -37,6 +38,57 @@ async function externalDone(t: ReturnType<typeof setup>, profileId = 'dcat') {
 }
 
 describe('P2 persistence and actions', () => {
+  it('template A is backed up and replaces template B on restore', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft({ scope: 'full', sectionIdx: null })))!;
+    const setId = t.store.getState().data.sessions[0].setId!;
+    await t.store.getState().act(id, { type: 'abandon' });
+    const a = [{ from: 0, to: 74, familyId: 'A' }];
+    const b = [{ from: 0, to: 74, familyId: 'B' }];
+    await t.store.getState().saveRanges(setId, a);
+    await t.store.getState().saveTemplateFromSet(setId);
+    await t.store.getState().exportNow();
+    const backup = t.backupTexts.at(-1)!;
+    await t.store.getState().saveRanges(setId, b);
+    await t.store.getState().saveTemplateFromSet(setId);
+    await t.repo.saveTemplate('obsolete', b);
+    expect(await t.store.getState().restore(backup)).toEqual({ ok: true });
+    expect(t.store.getState().templates).toEqual({ dcat: a });
+    expect((await t.repo.loadAll()).templates).toEqual({ dcat: a });
+    expect(JSON.parse(backup).data.templates).toEqual({ dcat: a });
+  });
+
+  it('restoring a legacy backup into an empty DB seeds the missing DCAT template even when seeded is true', async () => {
+    const t = setup();
+    const legacy = { ...emptyAllData(), settings: { ...emptyAllData().settings, seeded: true } };
+    delete (legacy as unknown as Record<string, unknown>).templates;
+    const backup = JSON.parse(JSON.stringify(buildBackup(legacy, 0)));
+    delete backup.data.templates;
+    await t.repo.replaceAll(backup.data);
+    await t.store.getState().boot();
+    expect(t.store.getState().templates.dcat).toEqual(buildDcatTemplate());
+    expect((await t.repo.loadAll()).templates.dcat).toEqual(buildDcatTemplate());
+    expect(t.store.getState().data.imports).toEqual([]);
+  });
+
+  it('legacy restore replaces existing templates then immediately seeds missing DCAT without reseeding imports', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft({ scope: 'full', sectionIdx: null })))!;
+    const setId = t.store.getState().data.sessions[0].setId!;
+    await t.store.getState().act(id, { type: 'abandon' });
+    await t.store.getState().saveRanges(setId, []);
+    await t.store.getState().saveTemplateFromSet(setId);
+    await t.repo.saveTemplate('obsolete', []);
+    const backup = buildBackup({ ...emptyAllData(), settings: { ...emptyAllData().settings, seeded: true } }, 0);
+    delete (backup.data as unknown as Record<string, unknown>).templates;
+    expect(await t.store.getState().restore(JSON.stringify(backup))).toEqual({ ok: true });
+    expect(t.store.getState().templates).toEqual({ dcat: buildDcatTemplate() });
+    expect((await t.repo.loadAll()).templates).toEqual({ dcat: buildDcatTemplate() });
+    expect(t.store.getState().data.imports).toEqual([]);
+  });
+
   it('external question views use stored answers even without answer events and never infer question times', () => {
     const s = { ...mkSession({ mode: 'external' }), externalAnswers: [2, null, 3, 4, 5] };
     const ps = { id: 'set1', name: 'external', profileId: 'dcat', layout: [], choices: 5,

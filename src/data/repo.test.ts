@@ -86,4 +86,14 @@ describe('repo', () => {
     await expect(repo.replaceAll(bad)).rejects.toThrow();
     expect((await repo.loadAll()).data.sessions.map(s => s.id)).toEqual(['S']);
   });
+  it('template replacement rolls back with the rest of the data when a template write fails', async () => {
+    const repo = fresh();
+    await repo.saveSession(mkSession());
+    await repo.saveTemplate('dcat', []);
+    await repo.saveTemplate('obsolete', []);
+    const before = await repo.loadAll();
+    const bad = { ...emptyAllData(), templates: { dcat: [{ from: 0, to: 1, familyId: 'A', bad: () => 1 }] } };
+    await expect(repo.replaceAll(bad)).rejects.toThrow();
+    expect(await repo.loadAll()).toEqual(before);
+  });
 });

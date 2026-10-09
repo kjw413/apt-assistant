@@ -133,7 +133,7 @@ describe('P4 분석 UI', () => {
       t.store.setState(state => ({ data: { ...state.data, imports: [], sets: [set],
         sessions: [session, { ...session, id: 'timed-retry', attempt: 2 }] } }));
       const html = t.renderAnalysis();
-      expect(html).toContain('시간 데이터 4/75문항');
+      expect(html).toContain('시간 데이터 4/20문항');
       const scatter = html.match(/<svg\b[^>]*>[\s\S]*?<\/svg>/)?.[0] ?? '';
       expect(scatter).toContain('<circle');
       expect(scatter).toContain('명제추리');

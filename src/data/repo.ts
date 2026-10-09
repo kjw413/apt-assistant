@@ -58,7 +58,7 @@ export function createDexieRepo(db: AptDb): Repo {
         else if (row.key.startsWith('alive:')) alive[row.key.slice(6)] = Number(row.value);
         else if (row.key.startsWith('template:')) templates[row.key.slice(9)] = row.value as Ranges;
       }
-      return { data: { profiles, sets, sessions, memos, imports, taxonomy, aliases, settings }, meta, alive, templates };
+      return { data: { profiles, sets, sessions, memos, templates, imports, taxonomy, aliases, settings }, meta, alive, templates };
     },
     async saveSession(s) {
       await db.sessions.put(s);
@@ -104,7 +104,8 @@ export function createDexieRepo(db: AptDb): Repo {
           db.imports.clear(), db.taxonomy.clear(), db.aliases.clear(),
         ]);
         const kvKeys = await db.kv.toCollection().primaryKeys();
-        await db.kv.bulkDelete(kvKeys.filter(k => k === 'settings' || String(k).startsWith('memo:')));
+        await db.kv.bulkDelete(kvKeys.filter(k => k === 'settings'
+          || String(k).startsWith('memo:') || String(k).startsWith('template:')));
         await db.profiles.bulkPut(data.profiles);
         await db.sets.bulkPut(data.sets);
         await db.sessions.bulkPut(data.sessions);
@@ -114,6 +115,7 @@ export function createDexieRepo(db: AptDb): Repo {
         await db.kv.bulkPut([
           { key: 'settings', value: data.settings },
           ...Object.entries(data.memos).map(([id, text]) => ({ key: `memo:${id}`, value: text })),
+          ...Object.entries(data.templates ?? {}).map(([id, ranges]) => ({ key: `template:${id}`, value: ranges })),
         ]);
       });
     },

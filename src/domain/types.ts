@@ -181,6 +181,7 @@ export interface AllData {
   sets: ProblemSet[];
   sessions: Session[];
   memos: Record<string, string>; // sessionId → 메모
+  templates?: Record<string, ProblemSet['ranges']>; // profileId → 기본 유형 범위(v0.2)
   imports: ImportRecord[];
   taxonomy: Taxonomy[];
   aliases: AliasEntry[];

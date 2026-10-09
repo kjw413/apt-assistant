@@ -1,11 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { buildBackup, validateBackup, migrate, backupFileName, emptyAllData, type BackupFile } from './backup';
+import { buildBackup, validateBackup, migrate, normalizeAllData, backupFileName, emptyAllData, type BackupFile } from './backup';
 import { mkSession } from './testkit';
 import type { AllData } from './types';
 
 const data = (): AllData => ({ ...emptyAllData(), sessions: [mkSession()], memos: { S: '메모' } });
 
 describe('backup', () => {
+  it('missing templates normalize to an empty record in old backups', () => {
+    const old = data();
+    delete (old as unknown as Record<string, unknown>).templates;
+    expect(normalizeAllData(old)).toHaveProperty('templates', {});
+    expect(buildBackup(old, 0).data).toHaveProperty('templates', {});
+    const backup = buildBackup(old, 0);
+    delete (backup.data as unknown as Record<string, unknown>).templates;
+    const result = validateBackup(backup);
+    expect(result.ok && result.file.data).toHaveProperty('templates', {});
+  });
   it('왕복', () => {
     const f = buildBackup(data(), Date.UTC(2026, 9, 9, 12, 30));
     expect(f.counts).toEqual({ sessions: 1, sets: 0, imports: 0 });

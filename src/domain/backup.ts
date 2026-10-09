@@ -19,7 +19,7 @@ const REASON_DATA = '백업 데이터가 올바르지 않습니다';
 
 export function emptyAllData(): AllData {
   return {
-    profiles: [], sets: [], sessions: [], memos: {}, imports: [], taxonomy: [], aliases: [],
+    profiles: [], sets: [], sessions: [], memos: {}, templates: {}, imports: [], taxonomy: [], aliases: [],
     settings: { ...DEFAULT_SETTINGS },
   };
 }
@@ -35,6 +35,7 @@ export function normalizeAllData(d: unknown): AllData {
   const out: Record<string, unknown> = { ...src };
   for (const k of ARRAY_KEYS) out[k] = Array.isArray(src[k]) ? src[k] : base[k];
   out.memos = isPlainObject(src.memos) ? src.memos : {};
+  out.templates = isPlainObject(src.templates) ? src.templates : {};
   out.settings = { ...base.settings, ...(isPlainObject(src.settings) ? src.settings : {}) };
   return out as unknown as AllData;
 }
@@ -46,7 +47,7 @@ export function buildBackup(all: AllData, now: number, appVersion = APP_VERSION)
     appVersion,
     exportedAt: new Date(now).toISOString(),
     counts: { sessions: all.sessions.length, sets: all.sets.length, imports: all.imports.length },
-    data: structuredClone(all),
+    data: structuredClone(normalizeAllData(all)),
   };
 }
 

@@ -1,5 +1,6 @@
 // 저장하지 않는 분석 셀과 가족 지표. 세트의 정답·유형을 조회 시점에 결합한다(spec §13, §17).
 import { questionViews } from './derive';
+import { sectionBounds } from './events';
 import { effectiveProfile } from './profiles';
 import type { AllData, SessionScope } from './types';
 
@@ -80,6 +81,7 @@ export function toCells(data: AllData): Cell[] {
     if (session.status !== 'graded' || !set) continue;
     const profile = effectiveProfile(session.profileId, data.profiles);
     const external = session.mode === 'external';
+    const bounds = sectionBounds(session);
     const grouped = new Map<string, Cell>();
     for (const view of questionViews(session, set)) {
       const plan = session.plan[view.sectionIdx];
@@ -103,6 +105,14 @@ export function toCells(data: AllData): Cell[] {
         grouped.set(groupKey, cell);
       }
       cell.questionN++;
+      // Whole-set frequency is independent of how far this attempt progressed.
+      if (!external && bounds[view.sectionIdx].start === null) continue;
+      // A valid lap remains useful even when the answer key is not known yet.
+      if (!external && view.timeSec !== null) {
+        cell.times.push(view.timeSec);
+        cell.timeSec = (cell.timeSec ?? 0) + view.timeSec;
+        cell.timedN++;
+      }
       if (view.key === null) continue;
       const answer = external && session.externalAnswers
         ? session.externalAnswers[view.q] ?? null : view.answer;
@@ -113,11 +123,6 @@ export function toCells(data: AllData): Cell[] {
       if (!external) {
         cell.inLimitCorrect! += Number(view.inLimitCorrect === true);
         cell.guessedCorrect! += Number(view.flag === 'guess' && correct);
-        if (view.timeSec !== null) {
-          cell.times.push(view.timeSec);
-          cell.timeSec = (cell.timeSec ?? 0) + view.timeSec;
-          cell.timedN++;
-        }
       }
     }
     cells.push(...grouped.values());

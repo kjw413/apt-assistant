@@ -152,7 +152,14 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
     }
 
     async function seed(): Promise<void> {
-      if (get().data.settings.seeded) return;
+      if (get().data.settings.seeded) {
+        // Old backups can have the seed marker without the v0.2 template.
+        if (get().templates.dcat === undefined) {
+          set(state => ({ templates: { ...state.templates, dcat: buildDcatTemplate() } }));
+          if (!await save(templateWrite('dcat'))) throw new Error(get().saveError ?? '초기 틀을 저장하지 못했습니다');
+        }
+        return;
+      }
       const record = buildSeedImport(deps.now());
       const taxonomy = buildSeedTaxonomy();
       const original = get().data.taxonomy.find(t => t.profileId === 'dcat');
@@ -225,7 +232,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
     async function downloadBackup(): Promise<boolean> {
       const now = deps.now();
       try {
-        const text = JSON.stringify(buildBackup(get().data, now));
+        const text = JSON.stringify(buildBackup({ ...get().data, templates: get().templates }, now));
         deps.download(backupFileName(now), text);
       } catch (error) {
         set({ saveError: errorMessage(error) });
@@ -563,15 +570,16 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
           await saveQueue;
           await repo.replaceAll(validated.file.data);
           // Keep the imported data in memory even if the following reload fails.
-          set({ data: normalizeAllData(validated.file.data) });
+          set({ data: normalizeAllData(validated.file.data), templates: structuredClone(validated.file.data.templates ?? {}) });
           const loaded = await repo.loadAll();
           const data = normalizeAllData(loaded.data);
           const now = deps.now();
           set(state => ({
             data, meta: { ...state.meta, ...loaded.meta, lastBackupAt: now }, templates: structuredClone(loaded.templates),
           }));
+          await seed();
           backupConfirmations.clear();
-          await recoverActive(data, loaded.alive, now);
+          await recoverActive(get().data, loaded.alive, now);
           if (!await save(['meta', () => repo.saveMeta(get().meta)])) return { ok: false, reason: get().saveError ?? undefined };
           return { ok: true };
         } catch (error) {
