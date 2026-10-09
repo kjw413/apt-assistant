@@ -51,13 +51,32 @@ test('키 라우팅: 메모 → 계산기 클릭 → 숫자는 계산기, 버블
   await page.getByTestId('calc-key-C').click();
   await page.keyboard.type('0.1+0.2=');
   await expect(page.getByTestId('calc-display')).toHaveText('0.3');
+  await expect(page.getByTestId('calc-expr')).toHaveText('0.1+0.2');
+  await page.getByTestId('calc-key-C').click();
+  await page.keyboard.type('1+2+3+');
+  await expect(page.getByTestId('calc-display')).toHaveText('1+2+3+');
+  await page.keyboard.press('3');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('calc-display')).toHaveText('9');
+  await expect(page.getByTestId('calc-expr')).toHaveText('1+2+3+3');
   await ctx.close();
 });
 
 test('그림판: 그리기 → 메모 탭 → 그림판 탭, 창 크기 변경 뒤에도 획 유지', async () => {
   const { ctx, page } = await launch('runner-paint');
   await startDrill(page, { section: '수리자료분석', count: 5 });
+  await expect(page.getByTestId('pen-settings')).toBeHidden();
   await page.getByTestId('tab-paint').click();
+  const gear = page.getByTestId('pen-settings');
+  await expect(gear).toBeVisible();
+  const clearBox = (await page.getByRole('button', { name: '삭제' }).boundingBox())!;
+  expect((await gear.boundingBox())!.x).toBeLessThan(clearBox.x);
+  await expect(page.getByTestId('paint-canvas')).toHaveAttribute('data-pen-width', '2');
+  await gear.click();
+  await expect(page.getByRole('group', { name: '펜 굵기' }).getByRole('button')).toHaveCount(4);
+  await page.getByTestId('pen-width-5').click();
+  await expect(page.getByRole('group', { name: '펜 굵기' })).toHaveCount(0);
+  await expect(page.getByTestId('paint-canvas')).toHaveAttribute('data-pen-width', '5');
   const box = (await page.getByTestId('paint-canvas').boundingBox())!;
   await page.mouse.move(box.x + 10, box.y + 10);
   await page.mouse.down();

@@ -1,9 +1,12 @@
 export type PaintPoint = { x: number; y: number };
 
 export type Stroke = {
-  color: 'black' | 'red' | 'eraser';
+  width: number; // 펜 굵기(CSS px). 색은 검정 볼펜 하나다.
   points: PaintPoint[];
 };
+
+export const PEN_WIDTHS = [1, 2, 3, 5] as const;
+export const DEFAULT_PEN_WIDTH = 2;
 
 export type PaintEntry = Stroke | { clear: true };
 
@@ -41,13 +44,6 @@ export function subscribePaint(sessionId: string, listener: () => void): () => v
 export function addPaintEntry(sessionId: string, entry: PaintEntry): void {
   const store = storeFor(sessionId);
   store.entries = [...store.entries, entry];
-  changed(store);
-}
-
-export function undoPaintEntry(sessionId: string): void {
-  const store = storeFor(sessionId);
-  if (store.entries.length === 0) return;
-  store.entries = store.entries.slice(0, -1);
   changed(store);
 }
 

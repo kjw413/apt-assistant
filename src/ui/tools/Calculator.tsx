@@ -22,10 +22,10 @@ export function Calculator(props: { state: CalcState; onPress: (key: CalcKey) =>
     <>
       <div className={styles.calcReadout}>
         <div className={styles.calcExpr} data-testid="calc-expr" title={result.expr}>
-          {result.expr}
+          <span>{result.expr}</span>
         </div>
         <output className={styles.calcDisplay} data-testid="calc-display" aria-label="계산기 표시">
-          {result.main}
+          <span>{result.main}</span>
         </output>
       </div>
       <div className={styles.keypad} aria-label="계산기 키패드">

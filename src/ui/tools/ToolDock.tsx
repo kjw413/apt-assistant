@@ -3,7 +3,28 @@ import { CALC_INITIAL, keyFromKeyboard, press, type CalcKey, type CalcState } fr
 import type { SectionTools } from '../../domain/types';
 import { Calculator } from './Calculator';
 import { Paint, type PaintHandle } from './Paint';
+import { DEFAULT_PEN_WIDTH, PEN_WIDTHS } from './paintStore';
 import styles from './tools.module.css';
+
+const PEN_WIDTH_KEY = 'apt-pen-width';
+
+function loadPenWidth(): number {
+  try {
+    const saved = Number(localStorage.getItem(PEN_WIDTH_KEY));
+    return (PEN_WIDTHS as readonly number[]).includes(saved) ? saved : DEFAULT_PEN_WIDTH;
+  } catch {
+    return DEFAULT_PEN_WIDTH;
+  }
+}
+
+function GearIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+    </svg>
+  );
+}
 
 export function ToolDock(props: {
   sessionId: string;
@@ -17,6 +38,9 @@ export function ToolDock(props: {
   const [selection, setSelection] = useState({ tools, tab: tools.tab, calc: tools.calc });
   const memoRef = useRef<HTMLTextAreaElement>(null);
   const paintRef = useRef<PaintHandle>(null);
+  const penMenuRef = useRef<HTMLDivElement>(null);
+  const [penWidth, setPenWidth] = useState(loadPenWidth);
+  const [penMenu, setPenMenu] = useState(false);
 
   // A new section is identified by its tools object, including identical defaults.
   if (selection.tools !== tools) {
@@ -32,6 +56,28 @@ export function ToolDock(props: {
   useLayoutEffect(() => {
     if (!memoVisible) memoRef.current?.blur();
   }, [memoVisible]);
+
+  useEffect(() => {
+    if (!paintVisible) setPenMenu(false);
+  }, [paintVisible]);
+
+  useEffect(() => {
+    if (!penMenu) return undefined;
+    function onOutside(event: PointerEvent) {
+      const target = event.target as Node | null;
+      if (target && penMenuRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-testid="pen-settings"]')) return;
+      setPenMenu(false);
+    }
+    document.addEventListener('pointerdown', onOutside, true);
+    return () => document.removeEventListener('pointerdown', onOutside, true);
+  }, [penMenu]);
+
+  const choosePen = (width: number) => {
+    setPenWidth(width);
+    setPenMenu(false);
+    try { localStorage.setItem(PEN_WIDTH_KEY, String(width)); } catch { /* 저장 못 해도 이번 세션에는 적용 */ }
+  };
 
   useEffect(() => {
     setState(CALC_INITIAL);
@@ -94,11 +140,32 @@ export function ToolDock(props: {
               onClick={() => setSelection(current => ({ ...current, tab: 'paint' }))}
             >그림판</button>
           </div>
-          <button
-            type="button" tabIndex={-1} className={styles.headerClear}
-            onMouseDown={event => event.preventDefault()}
-            onClick={() => tab === 'memo' ? onMemo('') : paintRef.current?.clear()}
-          >삭제</button>
+          <div className={styles.headerActions}>
+            <button
+              type="button" tabIndex={-1} className={styles.gearButton} data-testid="pen-settings"
+              hidden={!paintVisible} aria-label="펜 설정" aria-expanded={penMenu}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => setPenMenu(open => !open)}
+            ><GearIcon /></button>
+            <button
+              type="button" tabIndex={-1} className={styles.headerClear}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => tab === 'memo' ? onMemo('') : paintRef.current?.clear()}
+            >삭제</button>
+            {penMenu && paintVisible && (
+              <div ref={penMenuRef} className={styles.penMenu} role="group" aria-label="펜 굵기">
+                <span className={styles.penMenuTitle}>펜 굵기</span>
+                {PEN_WIDTHS.map(width => (
+                  <button
+                    key={width} type="button" tabIndex={-1} data-testid={`pen-width-${width}`}
+                    className={styles.penWidth} aria-label={`굵기 ${width}`} aria-pressed={penWidth === width}
+                    onMouseDown={event => event.preventDefault()}
+                    onClick={() => choosePen(width)}
+                  ><i style={{ width: width + 3, height: width + 3 }} /></button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <div className={styles.tabContent} data-tab={tab}>
           <div className={styles.memoPanel} role="tabpanel" aria-label="메모" hidden={!memoVisible}>
@@ -109,7 +176,7 @@ export function ToolDock(props: {
             />
           </div>
           <div className={styles.paintHost} role="tabpanel" aria-label="그림판" hidden={!paintVisible}>
-            <Paint ref={paintRef} sessionId={sessionId} active={paintVisible} />
+            <Paint ref={paintRef} sessionId={sessionId} active={paintVisible} penWidth={penWidth} />
           </div>
         </div>
       </div>

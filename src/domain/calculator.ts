@@ -1,27 +1,20 @@
-// 즉시 실행형 계산기(Windows 표준 계산기처럼 연산자 우선순위가 없다). spec §9.1.
+// 수식 입력형 계산기. = 전에는 입력한 수식을 그대로 보이고, =를 누르면 결과를 보이며 위에 수식 기록을 남긴다.
+// 계산은 일반 수식 순서(× ÷ 먼저)를 따른다.
 export type CalcKey =
   | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
   | '00' | '.' | '+' | '-' | '*' | '/' | '=' | 'C' | 'BS' | 'SQRT';
 
 type Op = '+' | '-' | '*' | '/';
+type Token = { kind: 'num'; text: string } | { kind: 'op'; op: Op };
 
 export interface CalcState {
-  display: string; // 입력 중이면 친 그대로, 아니면 결과 표시 문자열
-  val: number; // 지금 표시값의 수치(결과는 15자리 정규화 값)
-  acc: number | null;
-  op: Op | null;
-  entering: boolean; // 숫자를 치는 중
-  fresh: boolean; // 직전 연산자 뒤에 피연산자가 생겼다(숫자 입력이나 √)
-  lastOp: Op | null; // = 반복용
-  lastOperand: number | null;
-  expr: string;
+  tokens: readonly Token[]; // 입력 중인 수식
+  history: string; // 직전에 계산한 수식(위 줄)
+  result: number | null; // 직전 결과(수식을 새로 입력하기 전까지 표시)
   error: boolean;
 }
 
-export const CALC_INITIAL: CalcState = Object.freeze({
-  display: '0', val: 0, acc: null, op: null, entering: false, fresh: false,
-  lastOp: null, lastOperand: null, expr: '', error: false,
-});
+export const CALC_INITIAL: CalcState = Object.freeze({ tokens: [], history: '', result: null, error: false });
 
 const SYM: Record<Op, string> = { '+': '+', '-': '−', '*': '×', '/': '÷' };
 const MAX_DIGITS = 12;
@@ -39,113 +32,119 @@ export function formatCalcNumber(n: number): string {
   return String(r);
 }
 
-function errorState(): CalcState {
-  return { ...CALC_INITIAL, display: '오류', error: true };
+function exprText(tokens: readonly Token[]): string {
+  return tokens.map(t => (t.kind === 'num' ? t.text : SYM[t.op])).join('');
 }
 
-function apply(a: number, op: Op, b: number): number | null {
-  let r: number;
-  switch (op) {
-    case '+': r = a + b; break;
-    case '-': r = a - b; break;
-    case '*': r = a * b; break;
-    case '/':
-      if (b === 0) return null;
-      r = a / b;
-      break;
+function evaluate(tokens: readonly Token[]): number | null {
+  // 곱셈·나눗셈을 먼저 묶고, 나머지는 부호를 붙여 더한다.
+  const terms: number[] = [];
+  let pending: Op = '+';
+  for (const t of tokens) {
+    if (t.kind === 'op') { pending = t.op; continue; }
+    const n = Number(t.text);
+    if (!Number.isFinite(n)) return null;
+    if (pending === '*' || pending === '/') {
+      const prev = terms.pop() ?? 0;
+      if (pending === '/' && n === 0) return null;
+      terms.push(norm(pending === '*' ? prev * n : prev / n));
+    } else {
+      terms.push(pending === '-' ? -n : n);
+    }
   }
-  return Number.isFinite(r) ? norm(r) : null;
+  let sum = 0;
+  for (const term of terms) sum = norm(sum + term);
+  return Number.isFinite(sum) ? sum : null;
 }
 
-function showResult(s: CalcState, v: number, patch: Partial<CalcState>): CalcState {
-  return { ...s, val: v, display: formatCalcNumber(v), entering: false, fresh: false, ...patch };
+const isDigit = (k: CalcKey) => k.length === 1 && k >= '0' && k <= '9';
+const lastOf = (tokens: readonly Token[]) => tokens[tokens.length - 1];
+
+/** 결과가 떠 있는 상태(새 수식 입력 전). */
+const showingResult = (s: CalcState) => s.tokens.length === 0 && s.result !== null;
+
+function withTokens(s: CalcState, tokens: Token[]): CalcState {
+  return { ...s, tokens, result: null };
 }
 
-function inputDigits(s: CalcState, digits: '00' | string): CalcState {
-  let d = s.entering ? s.display : '0';
+function inputDigits(s: CalcState, digits: string): CalcState {
+  const tokens = showingResult(s) ? [] : [...s.tokens];
+  const last = lastOf(tokens);
+  let text = last?.kind === 'num' ? last.text : '';
   for (const ch of digits) {
-    if (d === '0') { d = ch; continue; }
-    if (d.replace(/[^0-9]/g, '').length >= MAX_DIGITS) break;
-    d += ch;
+    if (text === '' || text === '0') { text = ch; continue; }
+    if (text.replace(/[^0-9]/g, '').length >= MAX_DIGITS) break;
+    text += ch;
   }
-  return { ...s, display: d, val: parseFloat(d), entering: true, fresh: true };
+  if (last?.kind === 'num') tokens[tokens.length - 1] = { kind: 'num', text };
+  else tokens.push({ kind: 'num', text });
+  return withTokens(s, tokens);
 }
 
 function inputDot(s: CalcState): CalcState {
-  if (!s.entering) return { ...s, display: '0.', val: 0, entering: true, fresh: true };
-  if (s.display.includes('.')) return s;
-  return { ...s, display: s.display + '.' };
-}
-
-function backspace(s: CalcState): CalcState {
-  if (!s.entering) return s;
-  let d = s.display.slice(0, -1);
-  if (d === '' || d === '-') d = '0';
-  return { ...s, display: d, val: parseFloat(d) };
-}
-
-function sqrt(s: CalcState): CalcState {
-  const v = s.val;
-  if (v < 0) return errorState();
-  const r = norm(Math.sqrt(v));
-  const inner = `√(${formatCalcNumber(v)})`;
-  const expr = s.op !== null && s.acc !== null ? `${formatCalcNumber(s.acc)} ${SYM[s.op]} ${inner}` : inner;
-  return { ...showResult(s, r, { expr }), fresh: true };
+  const tokens = showingResult(s) ? [] : [...s.tokens];
+  const last = lastOf(tokens);
+  if (last?.kind === 'num') {
+    if (last.text.includes('.')) return s;
+    tokens[tokens.length - 1] = { kind: 'num', text: last.text + '.' };
+  } else {
+    tokens.push({ kind: 'num', text: '0.' });
+  }
+  return withTokens(s, tokens);
 }
 
 function operator(s: CalcState, op: Op): CalcState {
-  let acc: number;
-  if (s.op !== null && s.acc !== null && s.fresh) {
-    const r = apply(s.acc, s.op, s.val);
-    if (r === null) return errorState();
-    acc = r;
-  } else if (s.op !== null && s.acc !== null) {
-    acc = s.acc; // 연산자 교체
-  } else {
-    acc = norm(s.val);
+  if (showingResult(s)) {
+    return withTokens(s, [{ kind: 'num', text: formatCalcNumber(s.result as number) }, { kind: 'op', op }]);
   }
-  return showResult(s, acc, { acc, op, expr: `${formatCalcNumber(acc)} ${SYM[op]}` });
+  const tokens = [...s.tokens];
+  const last = lastOf(tokens);
+  if (!last) tokens.push({ kind: 'num', text: '0' }, { kind: 'op', op });
+  else if (last.kind === 'op') tokens[tokens.length - 1] = { kind: 'op', op };
+  else tokens.push({ kind: 'op', op });
+  return withTokens(s, tokens);
+}
+
+function sqrt(s: CalcState): CalcState {
+  if (showingResult(s)) {
+    const v = s.result as number;
+    if (v < 0) return { ...CALC_INITIAL, error: true, history: s.history };
+    return withTokens(s, [{ kind: 'num', text: formatCalcNumber(norm(Math.sqrt(v))) }]);
+  }
+  const last = lastOf(s.tokens);
+  if (last?.kind !== 'num') return s;
+  const v = Number(last.text);
+  if (v < 0) return { ...CALC_INITIAL, error: true, history: s.history };
+  const tokens = [...s.tokens];
+  tokens[tokens.length - 1] = { kind: 'num', text: formatCalcNumber(norm(Math.sqrt(v))) };
+  return withTokens(s, tokens);
+}
+
+function backspace(s: CalcState): CalcState {
+  const last = lastOf(s.tokens);
+  if (!last) return s;
+  const tokens = s.tokens.slice(0, -1);
+  if (last.kind === 'num' && last.text.length > 1) tokens.push({ kind: 'num', text: last.text.slice(0, -1) });
+  return { ...s, tokens };
 }
 
 function equals(s: CalcState): CalcState {
-  if (s.op !== null && s.acc !== null) {
-    const operand = s.val;
-    const r = apply(s.acc, s.op, operand);
-    if (r === null) return errorState();
-    return showResult(s, r, {
-      acc: r, op: null, lastOp: s.op, lastOperand: operand,
-      expr: `${formatCalcNumber(s.acc)} ${SYM[s.op]} ${formatCalcNumber(operand)} =`,
-    });
-  }
-  if (s.lastOp !== null && s.lastOperand !== null) {
-    const a = s.val;
-    const r = apply(a, s.lastOp, s.lastOperand);
-    if (r === null) return errorState();
-    return showResult(s, r, {
-      acc: r, expr: `${formatCalcNumber(a)} ${SYM[s.lastOp]} ${formatCalcNumber(s.lastOperand)} =`,
-    });
-  }
-  return showResult(s, s.val, { expr: `${formatCalcNumber(s.val)} =` });
-}
-
-function isDigit(k: CalcKey): boolean {
-  return k.length === 1 && k >= '0' && k <= '9';
+  let tokens = [...s.tokens];
+  while (tokens.length && lastOf(tokens).kind === 'op') tokens = tokens.slice(0, -1);
+  if (!tokens.length) return s;
+  const history = exprText(tokens);
+  const r = evaluate(tokens);
+  if (r === null) return { ...CALC_INITIAL, error: true, history };
+  return { tokens: [], history, result: r, error: false };
 }
 
 export function press(s: CalcState, k: CalcKey): CalcState {
   if (k === 'C') return CALC_INITIAL;
   if (s.error) {
-    if (k === 'BS') return CALC_INITIAL;
     if (isDigit(k) || k === '00' || k === '.') return press(CALC_INITIAL, k);
-    return s; // 오류 중 연산자·=·√ 무시
+    return s; // 오류 중 연산자·=·√·⌫ 무시
   }
-  // '=' 직후 숫자/소수점 입력은 새 계산을 시작한다. 반복 '=' 메모리도 버린다.
-  if (isDigit(k) || k === '00' || k === '.') {
-    if (!s.entering && s.op === null && s.lastOp !== null) {
-      return press(CALC_INITIAL, k);
-    }
-    if (isDigit(k) || k === '00') return inputDigits(s, k);
-  }
+  if (isDigit(k) || k === '00') return inputDigits(s, k);
   switch (k) {
     case '.': return inputDot(s);
     case 'BS': return backspace(s);
@@ -156,7 +155,10 @@ export function press(s: CalcState, k: CalcKey): CalcState {
 }
 
 export function view(s: CalcState): { main: string; expr: string } {
-  return { main: s.error ? '오류' : s.display, expr: s.expr };
+  const main = s.error ? '오류'
+    : s.tokens.length ? exprText(s.tokens)
+      : s.result !== null ? formatCalcNumber(s.result) : '0';
+  return { main, expr: s.history };
 }
 
 export function keyFromKeyboard(e: { key: string }): CalcKey | null {

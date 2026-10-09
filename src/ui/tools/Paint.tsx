@@ -1,9 +1,8 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSyncExternalStore } from 'react';
 import {
   addPaintEntry,
   getPaintSnapshot,
   subscribePaint,
-  undoPaintEntry,
   visibleStrokeCount,
   type PaintEntry,
   type PaintPoint,
@@ -11,13 +10,11 @@ import {
 } from './paintStore';
 import styles from './tools.module.css';
 
-type PaintTool = Stroke['color'];
 export type PaintHandle = { clear: () => void };
 
-export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boolean }>(function Paint({ sessionId, active = true }, ref) {
+export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boolean; penWidth: number }>(function Paint({ sessionId, active = true, penWidth }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef<{ pointerId: number; sessionId: string; stroke: Stroke } | null>(null);
-  const [tool, setTool] = useState<PaintTool>('black');
   const entries = useSyncExternalStore(
     (listener) => subscribePaint(sessionId, listener),
     () => getPaintSnapshot(sessionId),
@@ -95,7 +92,7 @@ export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boole
 
   const onPointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (!active || event.button !== 0 || drawingRef.current) return;
-    const stroke: Stroke = { color: tool, points: [pointFromEvent(event)] };
+    const stroke: Stroke = { width: penWidth, points: [pointFromEvent(event)] };
     drawingRef.current = { pointerId: event.pointerId, sessionId, stroke };
     event.currentTarget.setPointerCapture(event.pointerId);
     redraw();
@@ -108,27 +105,18 @@ export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boole
     redraw();
   };
 
-  const preventFocus = (event: React.MouseEvent<HTMLButtonElement>) => event.preventDefault();
-  const selectTool = (next: PaintTool) => () => setTool(next);
   const clear = () => { finishStroke(); addPaintEntry(sessionId, { clear: true }); };
-  const undo = () => { finishStroke(); undoPaintEntry(sessionId); };
 
   useImperativeHandle(ref, () => ({ clear }), [sessionId, finishStroke]);
 
   return (
     <section className={styles.paintPanel} aria-label="그림판">
-      <div className={styles.paintToolbar}>
-        <button type="button" tabIndex={-1} onMouseDown={preventFocus} onClick={selectTool('black')} className={styles.paintButton} aria-pressed={tool === 'black'}>검정 펜</button>
-        <button type="button" tabIndex={-1} onMouseDown={preventFocus} onClick={selectTool('red')} className={styles.paintButton} aria-pressed={tool === 'red'}>빨강 펜</button>
-        <button type="button" tabIndex={-1} onMouseDown={preventFocus} onClick={selectTool('eraser')} className={styles.paintButton} aria-pressed={tool === 'eraser'}>지우개</button>
-        <button type="button" tabIndex={-1} onMouseDown={preventFocus} onClick={clear} className={styles.paintButton}>전체 지우기</button>
-        <button type="button" tabIndex={-1} onMouseDown={preventFocus} onClick={undo} className={styles.paintButton}>실행 취소</button>
-      </div>
       <canvas
         ref={canvasRef}
         className={styles.paintCanvas}
         data-testid="paint-canvas"
         data-strokes={visibleStrokeCount(entries)}
+        data-pen-width={penWidth}
         aria-label="그림판 캔버스"
         style={{ touchAction: 'none' }}
         onPointerDown={onPointerDown}
@@ -148,20 +136,27 @@ export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boole
 function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke): void {
   const { points } = stroke;
   if (points.length === 0) return;
+  const width = typeof stroke.width === 'number' ? stroke.width : 2;
   context.save();
-  context.globalCompositeOperation = stroke.color === 'eraser' ? 'destination-out' : 'source-over';
-  context.strokeStyle = stroke.color === 'red' ? '#d22' : '#111';
-  context.fillStyle = context.strokeStyle;
+  context.strokeStyle = '#1a1a1a';
+  context.fillStyle = '#1a1a1a';
   context.lineCap = 'round';
   context.lineJoin = 'round';
-  context.lineWidth = stroke.color === 'eraser' ? 18 : 3;
+  context.lineWidth = width;
   context.beginPath();
-  context.moveTo(points[0].x, points[0].y);
   if (points.length === 1) {
-    context.arc(points[0].x, points[0].y, context.lineWidth / 2, 0, Math.PI * 2);
+    context.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2);
     context.fill();
   } else {
-    for (const point of points.slice(1)) context.lineTo(point.x, point.y);
+    // 볼펜처럼 매끈하게: 점 사이 중점을 지나는 2차 곡선
+    context.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length - 1; i += 1) {
+      const mx = (points[i].x + points[i + 1].x) / 2;
+      const my = (points[i].y + points[i + 1].y) / 2;
+      context.quadraticCurveTo(points[i].x, points[i].y, mx, my);
+    }
+    const end = points[points.length - 1];
+    context.lineTo(end.x, end.y);
     context.stroke();
   }
   context.restore();
