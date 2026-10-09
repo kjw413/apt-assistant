@@ -107,6 +107,7 @@ export interface Session {
   plan: SectionPlan[];
   events: Ev[];
   status: SessionStatus;
+  externalAnswers?: (number | null)[]; // 외부 모의 채점 입력(v0.2)
   reasons?: Record<number, 'concept' | 'slip' | 'misread'>; // v0.2
   createdAt: number;
   finishedAt?: number;
@@ -168,6 +169,7 @@ export interface SetupDraft {
 }
 
 export interface Settings {
+  seeded?: boolean; // 1회 시드를 삭제해도 다시 넣지 않는다(v0.2)
   autoBackupDownload: boolean;
   sound: boolean;
   flash: boolean;
