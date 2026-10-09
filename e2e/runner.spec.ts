@@ -88,24 +88,59 @@ test('그림판: 그리기 → 메모 탭 → 그림판 탭, 창 크기 변경 �
   await ctx.close();
 });
 
-test('도구 비율: 메모 고정 높이, 계산기 5행, 남는 높이는 OMR', async () => {
-  const { ctx, page } = await launch('runner-proportions', { viewport: { width: 340, height: 730 } });
+test('도구 비율: 오른쪽 330px 도구 열, 메모 255px, 계산기 5행, 왼쪽 높이는 OMR', async () => {
+  const { ctx, page } = await launch('runner-proportions', { viewport: { width: 576, height: 1000 } });
   try {
     await startDrill(page, { section: '수리자료분석', count: 30 });
-    for (const height of [730, 1200, 530]) {
-      await page.setViewportSize({ width: 340, height });
-      await expect.poll(() => page.getByTestId('memo').evaluate(el => el.getBoundingClientRect().height))
-        .toBe(Math.min(250, Math.max(120, height * .3)));
-      const rowHeight = (await page.getByTestId('calc-key-7').boundingBox())!.height;
-      expect(rowHeight).toBeGreaterThanOrEqual(34);
-      expect(rowHeight).toBeLessThanOrEqual(52);
-      if (height >= 730) expect(rowHeight).toBeGreaterThanOrEqual(51);
-    }
-    await page.setViewportSize({ width: 340, height: 1200 });
     const list = page.getByLabel('답안 마킹');
-    const before = (await list.boundingBox())!.height;
+    const toolColumn = page.getByLabel('도구 패널', { exact: true }).locator('..');
+    const toolsBox = (await toolColumn.boundingBox())!;
+    const listBox = (await list.boundingBox())!;
+    expect(toolsBox.width).toBeGreaterThanOrEqual(320);
+    expect(toolsBox.width).toBeLessThanOrEqual(340);
+    expect(toolsBox.x).toBeGreaterThan(listBox.x + listBox.width);
+    expect(Math.abs(toolsBox.y - listBox.y)).toBeLessThanOrEqual(1);
+
+    const memoHeight = (await page.getByTestId('memo').boundingBox())!.height;
+    expect(memoHeight).toBeGreaterThanOrEqual(245);
+    expect(memoHeight).toBeLessThanOrEqual(265);
+    const readoutHeight = await page.getByTestId('calc-display').evaluate(el =>
+      el.parentElement!.getBoundingClientRect().height);
+    expect(readoutHeight).toBeGreaterThanOrEqual(90);
+    expect(readoutHeight).toBeLessThanOrEqual(110);
+
+    const keys = page.getByLabel('계산기 키패드').getByRole('button');
+    await expect(keys).toHaveCount(20);
+    const keyRows = await keys.evaluateAll(buttons => {
+      const rows = new Map<number, number[]>();
+      for (const button of buttons) {
+        const { top, height } = button.getBoundingClientRect();
+        const row = Math.round(top);
+        rows.set(row, [...(rows.get(row) ?? []), height]);
+      }
+      return [...rows.values()];
+    });
+    expect(keyRows).toHaveLength(5);
+    for (const row of keyRows) {
+      expect(row).toHaveLength(4);
+      for (const height of row) {
+        expect(height).toBeGreaterThanOrEqual(43);
+        expect(height).toBeLessThanOrEqual(51);
+      }
+    }
+
+    const remainingHeight = await page.getByLabel('연습 러너').evaluate(runner => {
+      const bounds = runner.getBoundingClientRect();
+      const statusBottom = runner.querySelector('header')!.getBoundingClientRect().bottom;
+      const style = getComputedStyle(runner);
+      return bounds.bottom - parseFloat(style.paddingBottom) - statusBottom - parseFloat(style.rowGap);
+    });
+    expect(Math.abs(listBox.height - remainingHeight)).toBeLessThanOrEqual(1);
+    expect(Math.abs(listBox.y + listBox.height - (toolsBox.y + toolsBox.height))).toBeLessThanOrEqual(1);
+    expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    // Folding tools in the right column must not change the left column's height.
     await page.getByTestId('calc-toggle').click();
-    expect((await list.boundingBox())!.height).toBeGreaterThan(before + 250);
+    expect(Math.abs((await list.boundingBox())!.height - listBox.height)).toBeLessThanOrEqual(1);
   } finally { await ctx.close(); }
 });
 

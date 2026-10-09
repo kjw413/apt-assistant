@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CALC_INITIAL, keyFromKeyboard, press, type CalcKey, type CalcState } from '../../domain/calculator';
 import type { SectionTools } from '../../domain/types';
 import { Calculator } from './Calculator';
-import { Paint } from './Paint';
+import { Paint, type PaintHandle } from './Paint';
 import styles from './tools.module.css';
 
 export function ToolDock(props: {
@@ -15,8 +15,8 @@ export function ToolDock(props: {
   const { sessionId, tools, calcKeyboard, memo, onMemo } = props;
   const [state, setState] = useState<CalcState>(CALC_INITIAL);
   const [selection, setSelection] = useState({ tools, tab: tools.tab, calc: tools.calc });
-  const [memoFocused, setMemoFocused] = useState(false);
   const memoRef = useRef<HTMLTextAreaElement>(null);
+  const paintRef = useRef<PaintHandle>(null);
 
   // A new section is identified by its tools object, including identical defaults.
   if (selection.tools !== tools) {
@@ -79,47 +79,51 @@ export function ToolDock(props: {
   return (
     <section className={styles.dock} data-locked={allLocked} aria-label="도구 패널">
       <div className={styles.tabPanel} hidden={!tools.allowed.memo && !tools.allowed.paint}>
-        <div className={styles.tabs} role="tablist" aria-label="메모와 그림판">
+        <div className={styles.toolHeader}>
+          <div className={styles.tabs} role="tablist" aria-label="메모와 그림판">
+            <button
+              type="button" tabIndex={-1} role="tab" data-testid="tab-memo"
+              hidden={!tools.allowed.memo} aria-selected={tab === 'memo'}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => setSelection(current => ({ ...current, tab: 'memo' }))}
+            >메모장</button>
+            <button
+              type="button" tabIndex={-1} role="tab" data-testid="tab-paint"
+              hidden={!tools.allowed.paint} aria-selected={tab === 'paint'}
+              onMouseDown={event => event.preventDefault()}
+              onClick={() => setSelection(current => ({ ...current, tab: 'paint' }))}
+            >그림판</button>
+          </div>
           <button
-            type="button" tabIndex={-1} role="tab" data-testid="tab-memo"
-            hidden={!tools.allowed.memo} aria-selected={tab === 'memo'}
+            type="button" tabIndex={-1} className={styles.headerClear}
             onMouseDown={event => event.preventDefault()}
-            onClick={() => setSelection(current => ({ ...current, tab: 'memo' }))}
-          >메모</button>
-          <button
-            type="button" tabIndex={-1} role="tab" data-testid="tab-paint"
-            hidden={!tools.allowed.paint} aria-selected={tab === 'paint'}
-            onMouseDown={event => event.preventDefault()}
-            onClick={() => setSelection(current => ({ ...current, tab: 'paint' }))}
-          >그림판</button>
+            onClick={() => tab === 'memo' ? onMemo('') : paintRef.current?.clear()}
+          >삭제</button>
         </div>
-        <div className={styles.tabContent}>
+        <div className={styles.tabContent} data-tab={tab}>
           <div className={styles.memoPanel} role="tabpanel" aria-label="메모" hidden={!memoVisible}>
             <textarea
               ref={memoRef} className={styles.memo} data-testid="memo" aria-label="메모"
               value={memo} onChange={event => onMemo(event.target.value)}
-              onFocus={() => setMemoFocused(true)} onBlur={() => setMemoFocused(false)}
-              placeholder="여기에 메모하세요" spellCheck={false}
+              placeholder="메모…" spellCheck={false}
             />
-            <button
-              type="button" tabIndex={-1} className={styles.memoClear}
-              onMouseDown={event => event.preventDefault()} onClick={() => onMemo('')}
-            >지우기</button>
           </div>
           <div className={styles.paintHost} role="tabpanel" aria-label="그림판" hidden={!paintVisible}>
-            <Paint sessionId={sessionId} active={paintVisible} />
+            <Paint ref={paintRef} sessionId={sessionId} active={paintVisible} />
           </div>
         </div>
       </div>
       <div className={styles.calculator} hidden={!tools.allowed.calc} data-folded={selection.calc === 'collapsed'}>
-        <span className={styles.inputTarget}>{memoFocused ? '⌨ 메모' : '⌨ 계산기'}</span>
-        <button
-          type="button" tabIndex={-1} data-testid="calc-toggle" className={styles.calcToggle}
-          aria-label={selection.calc === 'open' ? '계산기 접기' : '계산기 펼치기'}
-          aria-expanded={selection.calc === 'open'}
-          onMouseDown={event => event.preventDefault()}
-          onClick={() => setSelection(current => ({ ...current, calc: current.calc === 'open' ? 'collapsed' : 'open' }))}
-        >{selection.calc === 'open' ? '접기' : '펼치기'}</button>
+        <div className={styles.toolHeader}>
+          <span className={styles.inputTarget}>계산기</span>
+          <button
+            type="button" tabIndex={-1} data-testid="calc-toggle" className={styles.calcToggle}
+            aria-label={selection.calc === 'open' ? '계산기 접기' : '계산기 펼치기'}
+            aria-expanded={selection.calc === 'open'}
+            onMouseDown={event => event.preventDefault()}
+            onClick={() => setSelection(current => ({ ...current, calc: current.calc === 'open' ? 'collapsed' : 'open' }))}
+          >{selection.calc === 'open' ? '접기' : '펼치기'}</button>
+        </div>
         <Calculator state={state} onPress={onPress} />
       </div>
       <p className={styles.lock} data-testid="tool-lock" hidden={!allLocked}>

@@ -6,7 +6,7 @@
   width: 100%;
   min-width: 0;
   min-height: 0;
-  gap: 6px;
+  gap: 8px;
   color: #202735;
   font: 14px/1.35 system-ui, sans-serif;
   box-sizing: border-box;
@@ -16,16 +16,16 @@
 .dock [hidden] { display: none !important; }
 .dock[data-locked='true'] { flex: 0 0 auto; }
 .dock button {
-  border: 1px solid #b9c2d0;
-  border-radius: 5px;
-  background: #f5f7fa;
+  border: 1px solid #e3e5e8;
+  border-radius: 6px;
+  background: #fff;
   color: inherit;
   font: inherit;
   cursor: pointer;
   padding: 4px 8px;
 }
-.dock button:hover { background: #e8edf5; }
-.dock button:active { background: #dbe4f1; }
+.dock button:hover { background: #f6f7f8; }
+.dock button:active { background: #eceef0; }
 .dock button:focus-visible { outline: 2px solid #2563b6; outline-offset: 1px; }
 .dock button:disabled { opacity: .45; cursor: default; }
 
@@ -36,15 +36,46 @@
   min-width: 0;
   min-height: 0;
 }
-.tabContent { height: clamp(120px, 30vh, 250px); flex: 0 0 auto; }
-.memoPanel, .paintHost, .paintPanel { height: 100%; }
-.tabs { display: flex; flex: 0 0 32px; gap: 4px; padding-bottom: 4px; }
-.tabs button { flex: 1; }
-.tabs button[aria-selected='true'], .paintButton[aria-pressed='true'] {
-  background: #e5edfb;
-  border-color: #5278b1;
-  color: #163f78;
+.tabPanel, .calculator {
+  overflow: hidden;
+  border: 1px solid #e3e5e8;
+  border-radius: 8px;
+  background: #fff;
 }
+.tabContent {
+  height: 271px;
+  flex: 0 0 auto;
+  padding: 8px;
+}
+/* Keep the drawing surface's sizing independent of the restyled memo. */
+.tabContent[data-tab='paint'] {
+  height: calc(clamp(120px, 30vh, 250px) + 16px);
+}
+.memoPanel, .paintHost, .paintPanel { height: 100%; }
+.toolHeader {
+  display: flex;
+  align-items: center;
+  flex: 0 0 30px;
+  padding: 3px 4px;
+  border-bottom: 1px solid #e3e5e8;
+  background: #f3f4f6;
+}
+.tabs { display: flex; align-items: center; gap: 3px; }
+.tabs button {
+  padding: 2px 7px;
+  border-color: transparent;
+  background: transparent;
+  color: #73777d;
+  font-size: 12px;
+  line-height: 16px;
+}
+.tabs button[aria-selected='true'], .paintButton[aria-pressed='true'] {
+  border-color: #dfe1e4;
+  background: #fff;
+  color: #20242a;
+  font-weight: 700;
+}
+.dock .headerClear, .dock .calcToggle { margin-left: auto; padding: 2px 6px; font-size: 11px; line-height: 16px; color: #555b63; }
 .memoPanel { position: relative; }
 .memo {
   display: block;
@@ -53,15 +84,16 @@
   height: 100%;
   min-height: 0;
   resize: none;
-  border: 1px solid #b9c2d0;
-  border-radius: 5px;
+  border: 1px solid #e3e5e8;
+  border-radius: 6px;
   background: #fff;
   color: inherit;
-  padding: 7px 7px 40px;
-  font: inherit;
+  padding: 8px;
+  font-size: 16px;
+  line-height: 1.35;
 }
 .memo:focus { outline: 2px solid #5278b1; outline-offset: -2px; }
-.memoClear { position: absolute; right: 4px; bottom: 4px; }
+.memo::placeholder { color: #888e96; opacity: 1; }
 .paintPanel { position: relative; }
 .paintToolbar {
   position: absolute;
@@ -80,38 +112,30 @@
   height: 100%;
   min-width: 0;
   min-height: 0;
-  border: 0;
-  outline: 1px solid #b9c2d0;
-  outline-offset: -1px;
-  border-radius: 5px;
+  border: 1px solid #e3e5e8;
+  border-radius: 6px;
   background: #fff;
   touch-action: none;
   cursor: crosshair;
 }
 .calculator {
-  display: grid;
-  flex: 0 0 auto;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: 'target . toggle' 'readout readout readout' 'keys keys keys';
-  grid-template-rows: 30px auto auto;
-  align-items: center;
-  gap: 4px 6px;
-  padding-top: 5px;
-  border-top: 1px solid #b9c2d0;
-  min-width: 0;
-}
-.inputTarget { grid-area: target; font-size: 12px; white-space: nowrap; }
-.calcToggle { grid-area: toggle; }
-.calcReadout {
-  grid-area: readout;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  height: clamp(60px, calc(30vh - 120px), 100px);
+  flex: 0 0 auto;
   min-width: 0;
-  padding: 6px;
-  border: 1px solid #b9c2d0;
-  border-radius: 5px;
+}
+.inputTarget { margin-left: 4px; font-size: 12px; white-space: nowrap; }
+.calcReadout {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  height: 100px;
+  min-width: 0;
+  margin: 8px;
+  padding: 8px;
+  border: 1px solid #e3e5e8;
+  border-radius: 6px;
   background: #fff;
   text-align: right;
 }
@@ -127,20 +151,28 @@
   display: block;
   overflow-x: auto;
   white-space: nowrap;
-  font-size: clamp(18px, 5vw, 24px);
+  font-size: 18px;
   line-height: 1.2;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .keypad {
-  grid-area: keys;
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: repeat(5, clamp(34px, 7.2vh, 52px));
-  gap: 3px;
+  grid-template-rows: repeat(5, 47px);
+  gap: 6px;
+  margin: 0 8px 8px;
 }
 .calculator[data-folded='true'] .keypad { display: none; }
 .calculator[data-folded='true'] .calcReadout { height: 60px; }
-.keypad .calcKey, .keypad .equalsKey { padding: 0; font-size: 18px; }
-.keypad .equalsKey { background: #245b9f; border-color: #245b9f; color: #fff; }
-.keypad .equalsKey:hover { background: #1c4b86; }
+.keypad .calcKey, .keypad .equalsKey { padding: 0; font-size: 15px; }
+.keypad .equalsKey { background: #e8002d; border-color: #e8002d; color: #fff; }
+.keypad .equalsKey:hover { background: #c90027; }
 .lock { margin: 0; font-size: 12px; line-height: 1.5; letter-spacing: -.3px; }
+
+@media (max-width: 559px) {
+  .tabContent { height: calc(clamp(110px, 24vh, 255px) + 16px); }
+  .calcReadout { height: clamp(52px, 10vh, 100px); }
+  .keypad { grid-template-rows: repeat(5, clamp(32px, 6vh, 47px)); }
+}

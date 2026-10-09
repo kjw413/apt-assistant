@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState, useSyncExternalStore } from 'react';
 import {
   addPaintEntry,
   getPaintSnapshot,
@@ -12,8 +12,9 @@ import {
 import styles from './tools.module.css';
 
 type PaintTool = Stroke['color'];
+export type PaintHandle = { clear: () => void };
 
-export function Paint({ sessionId, active = true }: { sessionId: string; active?: boolean }) {
+export const Paint = forwardRef<PaintHandle, { sessionId: string; active?: boolean }>(function Paint({ sessionId, active = true }, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawingRef = useRef<{ pointerId: number; sessionId: string; stroke: Stroke } | null>(null);
   const [tool, setTool] = useState<PaintTool>('black');
@@ -112,6 +113,8 @@ export function Paint({ sessionId, active = true }: { sessionId: string; active?
   const clear = () => { finishStroke(); addPaintEntry(sessionId, { clear: true }); };
   const undo = () => { finishStroke(); undoPaintEntry(sessionId); };
 
+  useImperativeHandle(ref, () => ({ clear }), [sessionId, finishStroke]);
+
   return (
     <section className={styles.paintPanel} aria-label="그림판">
       <div className={styles.paintToolbar}>
@@ -140,7 +143,7 @@ export function Paint({ sessionId, active = true }: { sessionId: string; active?
       />
     </section>
   );
-}
+});
 
 function drawStroke(context: CanvasRenderingContext2D, stroke: Stroke): void {
   const { points } = stroke;

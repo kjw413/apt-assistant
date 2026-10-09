@@ -218,7 +218,7 @@ export function Runner(props: { sessionId: string }) {
                   {Array.from({ length: plan.choices }, (_, n) => n + 1).map(c => (
                     <button {...mouseOnly} key={c} className={styles.bubble} data-testid={`bubble-${q}-${c}`}
                       aria-label={`${displayNo(q)}번 ${c} 선택`} aria-pressed={answers.get(q) === c}
-                      onClick={() => { void act({ type: 'answer', q, c }); }}>{String.fromCodePoint(0x2460 + c - 1)}</button>
+                      onClick={() => { void act({ type: 'answer', q, c }); }}>{c}</button>
                   ))}
                 </div>
               ))}

@@ -1,5 +1,12 @@
 .runner {
-  --row-height: 32px;
+  --row-height: 34px;
+  --bg: #f5f6f8;
+  --surface: #fff;
+  --border: #e3e5e8;
+  --accent: #e8002d;
+  --muted: #606a78;
+  color-scheme: light;
+  color: #202630;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -8,7 +15,7 @@
   min-width: 0;
   overflow: hidden;
   padding: 0 8px 8px;
-  gap: 6px;
+  gap: 8px;
   background: var(--bg);
 }
 .status {
@@ -44,12 +51,13 @@
 .menu button { min-width: 48px; }
 .rows {
   flex: 1;
+  min-width: 0;
   min-height: calc(var(--row-height) * 4 + 2px);
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 8px;
   background: var(--surface);
 }
 .row {
@@ -60,10 +68,10 @@
   padding: 2px 4px;
   border-bottom: 1px solid var(--border);
 }
-.row[data-next='true'] { background: var(--warn-bg); box-shadow: inset 3px 0 var(--accent); }
+.row[data-next='true'] { background: #f9fafb; box-shadow: inset 3px 0 var(--accent); }
 .number { text-align: center; font-variant-numeric: tabular-nums; font-size: 12px; }
-.row button { height: 100%; padding: 0; line-height: 1; }
-.bubble { font-size: 20px; border-color: transparent; background: transparent; }
+.row button { width: 28px; height: 28px; justify-self: center; padding: 0; line-height: 1; }
+.bubble { font-size: 14px; border: 1px solid var(--border); border-radius: 50%; background: #fff; }
 .bubble[aria-pressed='true'] { background: var(--accent); color: var(--surface); border-color: var(--accent); }
 .toolHost {
   /* Preserve four OMR rows; short windows scroll the fixed-size tools. */
@@ -119,6 +127,14 @@
 }
 .dialogHost h2 { font-size: 18px; }
 .dialogHost button { margin: 4px; }
-@media (max-height: 639px) {
-  .runner { --row-height: 28px; gap: 4px; padding-bottom: 4px; }
+@media (min-width: 560px) {
+  .runner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-rows: 40px minmax(0, 1fr);
+  }
+  .status { grid-column: 1 / -1; grid-row: 1; }
+  .rows, .external { grid-column: 1; grid-row: 2; min-height: 0; }
+  .toolHost { grid-column: 2; grid-row: 2; }
+  .breakHost { grid-column: 1 / -1; grid-row: 1 / -1; }
 }
