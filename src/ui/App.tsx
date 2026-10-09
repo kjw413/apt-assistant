@@ -8,6 +8,7 @@ import { KeyEntry } from './screens/KeyEntry';
 import { Result } from './screens/Result';
 import { ExternalSummary } from './screens/ExternalSummary';
 import { ExternalKeyEntry } from './screens/ExternalKeyEntry';
+import { Analysis } from './screens/Analysis';
 
 class ErrorBoundary extends Component<
   { children: ReactNode; onExport: () => void },
@@ -63,6 +64,7 @@ function AppContent() {
     case 'result': content = <Result sessionId={screen.sessionId} />; break;
     case 'externalSummary': content = <ExternalSummary sessionId={screen.sessionId} />; break;
     case 'externalKey': content = <ExternalKeyEntry sessionId={screen.sessionId} />; break;
+    case 'analysis': content = <Analysis />; break;
   }
 
   return (

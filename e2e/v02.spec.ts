@@ -137,3 +137,48 @@ test('DCAT 기본 틀을 저장하고 적용하며 LG에는 기본 틀이 없다
     await ctx.close();
   }
 });
+
+test('첫 부팅 분석은 시드 가족별 약점과 필터·세부 위치를 보여준다', async () => {
+  test.setTimeout(60_000);
+  const { ctx, page } = await launch('v02-analysis');
+  try {
+    await page.goto(APP_URL);
+    await page.getByRole('button', { name: '분석', exact: true }).click();
+
+    const familyTable = page.getByRole('table', { name: '가족별 분석' });
+    await expect(familyTable).toBeVisible();
+    await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
+    await expect(familyTable).toContainText('0/6');
+    await expect(familyTable).toContainText('8%');
+    await expect(page.getByTestId('verdict-study')).toContainText('전개도');
+    await expect(page.getByTestId('verdict-study')).toContainText('자료해석');
+    await expect(page.getByTestId('verdict-study')).toContainText('도형추리');
+    await expect(page.getByTestId('scatter')).toBeVisible();
+    await expect(page.getByTestId('verdict-speed')).toBeEmpty();
+    await expect(page.getByTestId('verdict-defer')).toBeEmpty();
+    await expect(page.getByTestId('verdict-guess')).toContainText('전개도');
+
+    await familyTable.getByRole('button', { name: /전개도/ }).click();
+    const rows = familyTable.locator('tbody > tr');
+    await expect(rows.nth(1)).toContainText('절반의 물');
+    await expect(rows.nth(1)).toContainText('58');
+    await expect(rows.nth(1)).toContainText('59');
+    await expect(familyTable.locator('tbody > tr')).toHaveCount(14);
+
+    await page.getByLabel('프로필').selectOption('lg-wayfit');
+    await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
+    await page.getByLabel('프로필').selectOption('dcat');
+    await page.getByLabel('출처').selectOption('tool');
+    await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
+    await page.getByLabel('출처').selectOption('import');
+    await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
+    await page.getByLabel('조건').selectOption('external');
+    await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
+    await page.getByLabel('조건').selectOption('external-overtime');
+    await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
+    await expect(page.getByLabel('최근 N회')).toHaveValue('all');
+    await expect(page.getByLabel('첫 풀이만')).toBeChecked();
+  } finally {
+    await ctx.close();
+  }
+});

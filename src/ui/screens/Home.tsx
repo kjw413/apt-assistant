@@ -28,6 +28,7 @@ export function Home() {
       {lastSetup && <button type="button" onClick={() => { void startSession(lastSetup); }}>직전 설정으로 시작</button>}
       <button type="button" onClick={() => go({ name: 'setup' })}>새 세션</button>
       <button type="button" onClick={() => go({ name: 'settings' })}>설정</button>
+      <button type="button" onClick={() => go({ name: 'analysis' })}>분석</button>
       <button type="button" onClick={() => { void exportNow(); }}>지금 내보내기</button>
     </div>
     <p className={styles.muted}>저장된 세션 {data.sessions.length}개</p>
