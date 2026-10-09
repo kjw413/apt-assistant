@@ -12,11 +12,18 @@ async function startDrill(page: Page, opts: { section: string; count: number }) 
   await page.getByRole('button', { name: '시작', exact: true }).click();   // 쉬는 시간 화면(연습은 수동)
 }
 
-test('답 3개 → 새로고침 → 유지, 더블클릭해도 답 유지', async () => {
+test('답 다시 누르면 해제 → 재선택 → 새로고침 뒤 답 3개 유지', async () => {
   const { ctx, page } = await launch('runner-reload');
   await startDrill(page, { section: '수리자료분석', count: 5 });
   await page.getByTestId('bubble-0-3').click();
-  await page.getByTestId('bubble-1-1').dblclick();
+  await expect(page.getByTestId('flag-1')).toHaveCount(0);
+  await expect(page.getByTestId('clear-1')).toHaveCount(0);
+  await expect(page.getByTestId('omr-row-1').getByRole('button')).toHaveCount(5);
+  await page.getByTestId('bubble-1-1').click();
+  await page.getByTestId('bubble-1-1').click();
+  await expect(page.getByTestId('bubble-1-1')).toHaveAttribute('aria-pressed', 'false');
+  await page.getByTestId('bubble-1-1').click();
+  await expect(page.getByTestId('bubble-1-1')).toHaveAttribute('aria-pressed', 'true');
   await page.getByTestId('bubble-2-5').click();
   await page.reload();
   await expect(page.getByTestId('bubble-0-3')).toHaveAttribute('aria-pressed', 'true');
@@ -57,11 +64,49 @@ test('그림판: 그리기 → 메모 탭 → 그림판 탭, 창 크기 변경 �
   await page.mouse.move(box.x + 60, box.y + 40, { steps: 5 });
   await page.mouse.up();
   await expect(page.getByTestId('paint-canvas')).toHaveAttribute('data-strokes', '1');
+  const expectRedrawn = async (height: number) => {
+    await expect.poll(() => page.getByTestId('paint-canvas').evaluate((element) => {
+      const canvas = element as HTMLCanvasElement;
+      const bounds = canvas.getBoundingClientRect();
+      const ratio = window.devicePixelRatio || 1;
+      const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+      return {
+        height: bounds.height,
+        backingMatches: canvas.width === Math.round(bounds.width * ratio)
+          && canvas.height === Math.round(bounds.height * ratio),
+        hasInk: pixels.some((value, index) => index % 4 === 3 && value > 0),
+      };
+    })).toEqual({ height, backingMatches: true, hasInk: true });
+  };
+  await expectRedrawn(250);
   await page.getByTestId('tab-memo').click();
   await page.getByTestId('tab-paint').click();
+  await expectRedrawn(250);
   await page.setViewportSize({ width: 400, height: 760 });
   await expect(page.getByTestId('paint-canvas')).toHaveAttribute('data-strokes', '1');
+  await expectRedrawn(228);
   await ctx.close();
+});
+
+test('도구 비율: 메모 고정 높이, 계산기 5행, 남는 높이는 OMR', async () => {
+  const { ctx, page } = await launch('runner-proportions', { viewport: { width: 340, height: 730 } });
+  try {
+    await startDrill(page, { section: '수리자료분석', count: 30 });
+    for (const height of [730, 1200, 530]) {
+      await page.setViewportSize({ width: 340, height });
+      await expect.poll(() => page.getByTestId('memo').evaluate(el => el.getBoundingClientRect().height))
+        .toBe(Math.min(250, Math.max(120, height * .3)));
+      const rowHeight = (await page.getByTestId('calc-key-7').boundingBox())!.height;
+      expect(rowHeight).toBeGreaterThanOrEqual(34);
+      expect(rowHeight).toBeLessThanOrEqual(52);
+      if (height >= 730) expect(rowHeight).toBeGreaterThanOrEqual(51);
+    }
+    await page.setViewportSize({ width: 340, height: 1200 });
+    const list = page.getByLabel('답안 마킹');
+    const before = (await list.boundingBox())!.height;
+    await page.getByTestId('calc-toggle').click();
+    expect((await list.boundingBox())!.height).toBeGreaterThan(before + 250);
+  } finally { await ctx.close(); }
 });
 
 test('DCAT 공간추리: 도구 잠금', async () => {
@@ -77,9 +122,14 @@ test('DCAT 공간추리: 도구 잠금', async () => {
 test('340×530 창: 가로 스크롤 없음, OMR 4행 이상', async () => {
   const { ctx, page } = await launch('runner-small', { viewport: { width: 340, height: 530 } });
   await startDrill(page, { section: '수리자료분석', count: 10 });
+  await expect(page.getByTestId('calc-toggle')).toHaveAttribute('aria-expanded', 'true');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(340);
   const visible = await page.locator('[data-testid^="omr-row-"]').evaluateAll(rows =>
-    rows.filter(r => { const b = r.getBoundingClientRect(); return b.top >= 0 && b.bottom <= window.innerHeight; }).length);
+    rows.filter(r => {
+      const b = r.getBoundingClientRect();
+      const list = r.parentElement!.getBoundingClientRect();
+      return b.top >= list.top && b.bottom <= list.bottom && b.bottom <= window.innerHeight;
+    }).length);
   expect(visible).toBeGreaterThanOrEqual(4);
   await ctx.close();
 });

@@ -99,7 +99,7 @@ export function reduce(
       if (a.type === 'answer') {
         const choices = s.plan[idx].choices;
         if (!Number.isInteger(a.c) || a.c < 1 || a.c > choices) return same('ignored');
-        if (answers.get(a.q) === a.c) return same();
+        if (answers.get(a.q) === a.c) return { session: push(s, { t: now, k: 'clear', q: a.q }) };
         return { session: push(s, { t: now, k: 'answer', q: a.q, c: a.c }) };
       }
       if (a.type === 'clear') {

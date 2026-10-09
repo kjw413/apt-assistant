@@ -8,9 +8,11 @@ function running(policy: 'hard' | 'soft' = 'soft', mode: 'omr' | 'external' = 'o
 }
 
 describe('답·해제', () => {
-  it('같은 답을 다시 누르면 같은 객체', () => {
+  it('같은 답을 다시 누르면 해제', () => {
     const s1 = reduce(running(), { type: 'answer', q: 0, c: 3 }, 2_000).session;
-    expect(reduce(s1, { type: 'answer', q: 0, c: 3 }, 3_000).session).toBe(s1);
+    const s2 = reduce(s1, { type: 'answer', q: 0, c: 3 }, 3_000).session;
+    expect(currentAnswers(s2).has(0)).toBe(false);
+    expect(s2.events.at(-1)).toMatchObject({ k: 'clear', q: 0 });
   });
   it('다른 답은 바꾼다', () => {
     let s = reduce(running(), { type: 'answer', q: 0, c: 3 }, 2_000).session;

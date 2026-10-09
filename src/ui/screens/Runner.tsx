@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent } from 'react';
-import { currentAnswers, currentFlags, lastEventT, sectionBounds } from '../../domain/events';
+import { currentAnswers, lastEventT, sectionBounds } from '../../domain/events';
 import { effectiveProfile } from '../../domain/profiles';
 import type { SessionAction } from '../../domain/session';
 import { pace, phaseOf } from '../../domain/timer';
@@ -78,7 +78,6 @@ export function Runner(props: { sessionId: string }) {
   const idx = phase?.idx ?? 0;
   const plan = session?.plan[idx];
   const answers = session ? currentAnswers(session) : new Map<number, number>();
-  const flags = session ? currentFlags(session) : new Map<number, 'guess' | 'skip'>();
   const questions = plan ? Array.from({ length: plan.qTo - plan.qFrom + 1 }, (_, n) => plan.qFrom + n) : [];
   const nextUnanswered = questions.find(q => !answers.has(q));
   const unanswered = questions.filter(q => !answers.has(q)).length;
@@ -211,21 +210,16 @@ export function Runner(props: { sessionId: string }) {
               <div className={`${styles.bigClock} ${clockClass}`}>{clock}</div>
             </section>
           ) : (
-            <div ref={rowsRef} className={`${styles.rows} ${allLocked ? styles.expandedRows : ''}`} aria-label="답안 마킹">
+            <div ref={rowsRef} className={styles.rows} aria-label="답안 마킹">
               {questions.map(q => (
                 <div key={q} data-testid={`omr-row-${q}`} data-next={q === nextUnanswered}
-                  className={styles.row} style={{ gridTemplateColumns: `32px repeat(${plan.choices}, minmax(0, 1fr)) 28px 28px` }}>
+                  className={styles.row} style={{ gridTemplateColumns: `32px repeat(${plan.choices}, minmax(0, 1fr))` }}>
                   <span className={styles.number}>{displayNo(q)}</span>
                   {Array.from({ length: plan.choices }, (_, n) => n + 1).map(c => (
                     <button {...mouseOnly} key={c} className={styles.bubble} data-testid={`bubble-${q}-${c}`}
                       aria-label={`${displayNo(q)}번 ${c} 선택`} aria-pressed={answers.get(q) === c}
                       onClick={() => { void act({ type: 'answer', q, c }); }}>{String.fromCodePoint(0x2460 + c - 1)}</button>
                   ))}
-                  <button {...mouseOnly} className={styles.flag} data-testid={`flag-${q}`}
-                    aria-label={`${displayNo(q)}번 표시`} aria-pressed={flags.has(q)}
-                    onClick={() => { void act({ type: 'flag', q, on: !flags.has(q) }); }}>⚑</button>
-                  <button {...mouseOnly} data-testid={`clear-${q}`} aria-label={`${displayNo(q)}번 답 지우기`}
-                    onClick={() => { void act({ type: 'clear', q }); }}>×</button>
                 </div>
               ))}
             </div>

@@ -10,7 +10,7 @@ import { KeyEntry } from './KeyEntry';
 import { Result } from './Result';
 
 let n = 0;
-async function gradedSession() {
+async function gradedSession(guessed = false) {
   const repo = createDexieRepo(new AptDb(`result-key-test-${++n}`));
   const downloads: string[] = [];
   const store = createAppStore({ repo, now: () => 1_000_000,
@@ -23,6 +23,7 @@ async function gradedSession() {
   }))!;
   await store.getState().act(id, { type: 'startSection' });
   for (const [q, c] of [1, 2, 4].entries()) await store.getState().act(id, { type: 'answer', q, c });
+  if (guessed) await store.getState().act(id, { type: 'flag', q: 0, on: true });
   await store.getState().act(id, { type: 'finish' });
   const setId = store.getState().data.sessions[0].setId!;
   await store.getState().saveKey(setId, [1, 2, 3]);
@@ -34,6 +35,18 @@ async function gradedSession() {
 }
 
 describe('answer key correction', () => {
+  it('Result hides obsolete flag UI when no legacy guesses exist', async () => {
+    const t = await gradedSession();
+    const html = t.render(Result);
+    expect(html).not.toContain('⚑');
+    expect(html).not.toContain('찍음');
+  });
+  it('Result retains aggregate legacy guess stats without a question flag column', async () => {
+    const t = await gradedSession(true);
+    const html = t.render(Result);
+    expect(html).toContain('찍음');
+    expect(html).not.toContain('⚑');
+  });
   it('graded Result offers 정답 수정', async () => {
     const t = await gradedSession();
     expect(t.render(Result)).toMatch(/<button[^>]*>정답 수정<\/button>/);

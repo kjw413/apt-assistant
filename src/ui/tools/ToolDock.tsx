@@ -93,20 +93,22 @@ export function ToolDock(props: {
             onClick={() => setSelection(current => ({ ...current, tab: 'paint' }))}
           >그림판</button>
         </div>
-        <div className={styles.memoPanel} role="tabpanel" aria-label="메모" hidden={!memoVisible}>
-          <textarea
-            ref={memoRef} className={styles.memo} data-testid="memo" aria-label="메모"
-            value={memo} onChange={event => onMemo(event.target.value)}
-            onFocus={() => setMemoFocused(true)} onBlur={() => setMemoFocused(false)}
-            placeholder="여기에 메모하세요" spellCheck={false}
-          />
-          <button
-            type="button" tabIndex={-1} className={styles.memoClear}
-            onMouseDown={event => event.preventDefault()} onClick={() => onMemo('')}
-          >지우기</button>
-        </div>
-        <div className={styles.paintHost} role="tabpanel" aria-label="그림판" hidden={!paintVisible}>
-          <Paint sessionId={sessionId} active={paintVisible} />
+        <div className={styles.tabContent}>
+          <div className={styles.memoPanel} role="tabpanel" aria-label="메모" hidden={!memoVisible}>
+            <textarea
+              ref={memoRef} className={styles.memo} data-testid="memo" aria-label="메모"
+              value={memo} onChange={event => onMemo(event.target.value)}
+              onFocus={() => setMemoFocused(true)} onBlur={() => setMemoFocused(false)}
+              placeholder="여기에 메모하세요" spellCheck={false}
+            />
+            <button
+              type="button" tabIndex={-1} className={styles.memoClear}
+              onMouseDown={event => event.preventDefault()} onClick={() => onMemo('')}
+            >지우기</button>
+          </div>
+          <div className={styles.paintHost} role="tabpanel" aria-label="그림판" hidden={!paintVisible}>
+            <Paint sessionId={sessionId} active={paintVisible} />
+          </div>
         </div>
       </div>
       <div className={styles.calculator} hidden={!tools.allowed.calc} data-folded={selection.calc === 'collapsed'}>

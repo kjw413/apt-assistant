@@ -16,6 +16,27 @@ const fullDcatSoft: SetupDraft = {
 };
 
 describe('Runner break actions', () => {
+  it('OMR 행에는 번호와 선택 버블만 표시한다', async () => {
+    const store = createAppStore({
+      repo: createDexieRepo(new AptDb('runner-actions-bubbles')),
+      now: () => Date.now(),
+      download: () => {},
+      acquireLock: async () => 'acquired',
+    });
+    await store.getState().boot();
+    const id = (await store.getState().startSession(fullDcatSoft))!;
+    await store.getState().act(id, { type: 'startSection' });
+    await store.getState().act(id, { type: 'answer', q: 0, c: 2 });
+    const html = renderToStaticMarkup(createElement(AppProvider, {
+      store: { ...store, getInitialState: store.getState },
+      children: createElement(Runner, { sessionId: id }),
+    }));
+    expect(html).toContain('data-testid="omr-row-0"');
+    expect(html).toMatch(/data-testid="bubble-0-2"[^>]*aria-pressed="true"/);
+    expect(html).toMatch(/data-testid="bubble-0-4"[^>]*aria-pressed="false"/);
+    expect(html).not.toMatch(/data-testid="(?:flag|clear)-/);
+  });
+
   it('renders mouse-only finish and abandon controls during a break', async () => {
     const store = createAppStore({
       repo: createDexieRepo(new AptDb('runner-actions-break')),
