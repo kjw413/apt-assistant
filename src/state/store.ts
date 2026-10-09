@@ -2,9 +2,11 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Meta, Repo } from '../data/repo';
 import { backupFileName, buildBackup, emptyAllData, normalizeAllData, validateBackup } from '../domain/backup';
 import { lastEventT } from '../domain/events';
+import { parseKey } from '../domain/grading';
+import { buildDcatTemplate, buildSeedImport, buildSeedTaxonomy } from '../domain/seed';
 import { defaultDrillSeconds, effectiveProfile, makePlan, makeSetLayout, validateProfileEdit } from '../domain/profiles';
 import { advance, catchUpAfterGap, createSession, isGap, reduce, type SessionAction } from '../domain/session';
-import { isFutureDocument, SCHEMA_VERSION, type AllData, type ExamProfile, type ProblemSet, type Session, type Settings, type SetupDraft } from '../domain/types';
+import { isFutureDocument, SCHEMA_VERSION, type AllData, type ExamProfile, type ProblemSet, type Session, type Settings, type SetupDraft, type Taxonomy } from '../domain/types';
 import { compatibleSets } from '../ui/screens/setupLogic';
 
 export type Screen =
@@ -13,6 +15,7 @@ export type Screen =
   | { name: 'result'; sessionId: string } | { name: 'externalSummary'; sessionId: string };
 export interface AppState {
   ready: boolean; bootError: string | null; screen: Screen; data: AllData; meta: Meta;
+  templates: Record<string, ProblemSet['ranges']>;
   lockWarning: boolean; persisted: boolean | null; saveError: string | null; toast: string | null;
 }
 export interface AppActions {
@@ -24,6 +27,11 @@ export interface AppActions {
   setMemo(sessionId: string, text: string): void;
   flushMemos(): Promise<void>;
   saveKey(setId: string, key: (number | null)[]): Promise<void>;
+  gradeExternal(sessionId: string, answersText: string, keyText: string): Promise<{ ok: true } | { ok: false; reason: string }>;
+  saveRanges(setId: string, ranges: ProblemSet['ranges']): Promise<void>;
+  saveTemplateFromSet(setId: string): Promise<void>;
+  addFamily(profileId: string, name: string): Promise<void>;
+  deleteImport(id: string): Promise<void>;
   completeGrading(sessionId: string): Promise<void>;
   gradeLater(sessionId: string): Promise<void>;
   confirmExternal(sessionId: string): Promise<void>;
@@ -130,6 +138,48 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
       }];
     }
 
+    function taxonomyWrite(id: string): [string, Write] {
+      return [`taxonomy:${id}`, async () => {
+        const taxonomy = get().data.taxonomy.find(t => t.profileId === id);
+        if (taxonomy) await repo.saveTaxonomy(taxonomy);
+      }];
+    }
+
+    function templateWrite(id: string): [string, Write] {
+      return [`template:${id}`, () => repo.saveTemplate(id, get().templates[id] ?? [])];
+    }
+
+    async function seed(): Promise<void> {
+      if (get().data.settings.seeded) return;
+      const record = buildSeedImport(deps.now());
+      const taxonomy = buildSeedTaxonomy();
+      const original = get().data.taxonomy.find(t => t.profileId === 'dcat');
+      // An interrupted first boot or existing user taxonomy must not lose edits.
+      const merged: Taxonomy = original ? {
+        ...original,
+        families: [...original.families, ...taxonomy.families.filter(f => !original.families.some(x => x.id === f.id))],
+        leaves: [...original.leaves, ...taxonomy.leaves.filter(l => !original.leaves.some(x => x.id === l.id && x.familyId === l.familyId))],
+      } : taxonomy;
+      set(state => ({
+        data: {
+          ...state.data,
+          imports: state.data.imports.some(i => i.id === record.id) ? state.data.imports : [...state.data.imports, record],
+          taxonomy: original ? state.data.taxonomy.map(t => t.profileId === 'dcat' ? merged : t) : [...state.data.taxonomy, merged],
+        },
+        templates: { ...state.templates, dcat: state.templates.dcat ?? buildDcatTemplate() },
+      }));
+      const existing = get().data.imports.find(i => i.id === record.id)!;
+      if (!await save(
+        ...(!isFutureDocument(existing) ? [[`import:${record.id}`, () => repo.saveImport(existing)] as [string, Write]] : []),
+        taxonomyWrite('dcat'), templateWrite('dcat'),
+      )) throw new Error(get().saveError ?? '초기 기록을 저장하지 못했습니다');
+      // The marker is written last so a failed seed can be retried on boot.
+      set(state => ({ data: { ...state.data, settings: { ...state.data.settings, seeded: true } } }));
+      if (!await save(['settings', () => repo.saveSettings(get().data.settings)])) {
+        throw new Error(get().saveError ?? '초기 기록을 저장하지 못했습니다');
+      }
+    }
+
     function updateSession(s: Session): void {
       set(state => ({ data: { ...state.data, sessions: state.data.sessions.map(x => x.id === s.id ? s : x) } }));
     }
@@ -196,7 +246,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
     }
 
     return {
-      ready: false, bootError: null, screen: { name: 'home' }, data: emptyAllData(), meta: { lastBackupAt: null },
+      ready: false, bootError: null, screen: { name: 'home' }, data: emptyAllData(), meta: { lastBackupAt: null }, templates: {},
       lockWarning: false, persisted: null, saveError: null, toast: null,
 
       boot() {
@@ -217,8 +267,9 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
             set({ persisted });
             const loaded = await repo.loadAll();
             const data = normalizeAllData(loaded.data);
-            set({ data, meta: { ...loaded.meta } });
-            await recoverActive(data, loaded.alive, deps.now());
+            set({ data, meta: { ...loaded.meta }, templates: structuredClone(loaded.templates) });
+            await seed();
+            await recoverActive(get().data, loaded.alive, deps.now());
             set({ ready: true });
           } catch (error) {
             set({ bootError: errorMessage(error), ready: false });
@@ -264,7 +315,8 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
                 profileId: profile.id,
                 layout: makeSetLayout(profile, scope, { sectionIdx: draft.sectionIdx, drillCount: draft.drillCount }),
                 choices: profile.choices, numbering: { startNo: draft.startNo, mode: draft.numberingMode },
-                key: null, ranges: [], createdAt: now, updatedAt: now, schemaVersion: SCHEMA_VERSION,
+                key: null, ranges: profile.id === 'dcat' && scope === 'full' ? structuredClone(get().templates.dcat ?? []) : [],
+                createdAt: now, updatedAt: now, schemaVersion: SCHEMA_VERSION,
               };
               createdSet = true;
             }
@@ -372,6 +424,84 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
         set({ screen: { name: 'result', sessionId: id } });
       },
 
+      async gradeExternal(id, answersText, keyText) {
+        if (!writable()) return { ok: false, reason: '지금은 저장할 수 없습니다' };
+        const s = get().data.sessions.find(s => s.id === id);
+        if (!s || isFutureDocument(s) || s.mode !== 'external' || (s.status !== 'external_done' && s.status !== 'graded')) {
+          return { ok: false, reason: '종료한 외부 모의 세션을 선택하세요' };
+        }
+        const profile = effectiveProfile(s.profileId, get().data.profiles);
+        if (isFutureDocument(profile)) return { ok: false, reason: '새 버전 데이터는 고칠 수 없습니다' };
+        const layout = makeSetLayout(profile, 'full', {});
+        const count = layout.reduce((sum, part) => sum + part.count, 0);
+        const answers = parseKey(answersText, count, profile.choices);
+        const key = parseKey(keyText, count, profile.choices);
+        for (const [label, parsed] of [['내 답', answers], ['정답', key]] as const) {
+          if (parsed.lengthMismatch) return { ok: false, reason: `${label}은 ${count}문항이어야 합니다` };
+          if (parsed.errors.length) return { ok: false, reason: `${label} ${parsed.errors[0].pos + 1}번의 문자가 올바르지 않습니다` };
+        }
+        const original = s.setId ? get().data.sets.find(ps => ps.id === s.setId) : undefined;
+        if (s.setId && (!original || isFutureDocument(original))) {
+          return { ok: false, reason: '문제 세트를 고칠 수 없습니다' };
+        }
+        const now = deps.now();
+        const ps: ProblemSet = original ? { ...original, key: key.key, updatedAt: now } : {
+          id: newId(), name: s.label ?? `외부 모의 ${localDateTime(s.createdAt)}`, profileId: profile.id,
+          layout, choices: profile.choices, numbering: { startNo: 1, mode: 'continuous' }, key: key.key,
+          ranges: profile.id === 'dcat' ? structuredClone(get().templates.dcat ?? []) : [],
+          createdAt: now, updatedAt: now, schemaVersion: SCHEMA_VERSION,
+        };
+        set(state => ({ data: { ...state.data,
+          sets: original ? state.data.sets.map(x => x.id === ps.id ? ps : x) : [...state.data.sets, ps],
+          sessions: state.data.sessions.map(x => x.id === id ? { ...x, setId: ps.id, externalAnswers: answers.key, status: 'graded' } : x),
+        } }));
+        if (!await save(setWrite(ps.id), sessionWrite(id))) return { ok: false, reason: get().saveError ?? '저장하지 못했습니다' };
+        await autoBackup(id);
+        set({ screen: { name: 'result', sessionId: id } });
+        return { ok: true };
+      },
+
+      async saveRanges(id, ranges) {
+        if (!writable()) return;
+        const original = get().data.sets.find(s => s.id === id);
+        if (!original || isFutureDocument(original)) return;
+        const updated = { ...original, ranges: structuredClone(ranges), updatedAt: deps.now() };
+        set(state => ({ data: { ...state.data, sets: state.data.sets.map(s => s.id === id ? updated : s) } }));
+        await save(setWrite(id));
+      },
+
+      async saveTemplateFromSet(id) {
+        if (!writable()) return;
+        const ps = get().data.sets.find(s => s.id === id);
+        if (!ps || isFutureDocument(ps) || ps.profileId !== 'dcat') return;
+        set(state => ({ templates: { ...state.templates, dcat: structuredClone(ps.ranges) } }));
+        await save(templateWrite('dcat'));
+      },
+
+      async addFamily(profileId, name) {
+        if (!writable()) return;
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const original = get().data.taxonomy.find(t => t.profileId === profileId);
+        if (original?.families.some(f => f.id === trimmed || f.name === trimmed)) return;
+        const taxonomy: Taxonomy = {
+          ...original, profileId,
+          families: [...(original?.families ?? []), { id: trimmed, name: trimmed, sectionHint: [] }],
+          leaves: original?.leaves ?? [],
+        };
+        set(state => ({ data: { ...state.data, taxonomy: original
+          ? state.data.taxonomy.map(t => t.profileId === profileId ? taxonomy : t) : [...state.data.taxonomy, taxonomy] } }));
+        await save(taxonomyWrite(profileId));
+      },
+
+      async deleteImport(id) {
+        if (!writable()) return;
+        const original = get().data.imports.find(i => i.id === id);
+        if (!original || isFutureDocument(original)) return;
+        set(state => ({ data: { ...state.data, imports: state.data.imports.filter(i => i.id !== id) } }));
+        await save([`import:${id}`, () => repo.deleteImport(id)]);
+      },
+
       async gradeLater(id) {
         if (get().data.sessions.some(s => s.id === id && isFutureDocument(s))) return;
         if (!writable() || get().data.sessions.find(s => s.id === id)?.status !== 'awaiting_key') return;
@@ -436,7 +566,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
           const data = normalizeAllData(loaded.data);
           const now = deps.now();
           set(state => ({
-            data, meta: { ...state.meta, ...loaded.meta, lastBackupAt: now },
+            data, meta: { ...state.meta, ...loaded.meta, lastBackupAt: now }, templates: structuredClone(loaded.templates),
           }));
           backupConfirmations.clear();
           await recoverActive(data, loaded.alive, now);

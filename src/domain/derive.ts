@@ -70,6 +70,7 @@ function displayNo(set: ProblemSet, s: Session, q: number, idx: number): string 
 }
 
 export function questionViews(s: Session, set: ProblemSet): QuestionView[] {
+  const externalAnswers = s.mode === 'external' && s.externalAnswers !== undefined ? s.externalAnswers : null;
   const bounds = sectionBounds(s);
   const answers = currentAnswers(s);
   const flags = currentFlags(s);
@@ -83,10 +84,10 @@ export function questionViews(s: Session, set: ProblemSet): QuestionView[] {
     const deadline = started ? deadlineOf(s, idx, b.end ?? lastEventT(s)) : null;
     const inLimit = deadline !== null ? currentAnswers(s, deadline) : new Map<number, number>();
     for (let q = p.qFrom; q <= p.qTo; q++) {
-      const answer = started ? (answers.get(q) ?? null) : null;
+      const answer = externalAnswers ? (externalAnswers[q] ?? null) : (started ? (answers.get(q) ?? null) : null);
       const rec = stats.get(q);
-      const answeredAt = answer !== null ? (rec?.at ?? null) : null;
-      const inLimitAnswer = started ? (inLimit.get(q) ?? null) : null;
+      const answeredAt = externalAnswers ? null : (answer !== null ? (rec?.at ?? null) : null);
+      const inLimitAnswer = externalAnswers ? answer : (started ? (inLimit.get(q) ?? null) : null);
       const key = set.key ? (set.key[q] ?? null) : null;
       const graded = set.key !== null && key !== null;
       views.push({
@@ -95,14 +96,14 @@ export function questionViews(s: Session, set: ProblemSet): QuestionView[] {
         sectionIdx: idx,
         answer,
         answeredAt,
-        changes: Math.max(0, (rec?.count ?? 0) - 1),
+        changes: externalAnswers ? 0 : Math.max(0, (rec?.count ?? 0) - 1),
         inLimitAnswer,
-        overtime: answeredAt !== null && deadline !== null && answeredAt > deadline,
+        overtime: externalAnswers ? false : answeredAt !== null && deadline !== null && answeredAt > deadline,
         flag: flags.get(q) ?? null,
         key,
         correct: graded ? answer === key : null,
         inLimitCorrect: graded ? inLimitAnswer === key : null,
-        timeSec: lapMap.get(q) ?? null,
+        timeSec: externalAnswers ? null : lapMap.get(q) ?? null,
       });
     }
   });

@@ -5,6 +5,10 @@ import { AptDb } from '../data/db';
 import { createDexieRepo, type Repo } from '../data/repo';
 import type { SetupDraft } from '../domain/types';
 import { buildBackup } from '../domain/backup';
+import { buildDcatTemplate, buildSeedTaxonomy } from '../domain/seed';
+import { questionViews } from '../domain/derive';
+import { summarize } from '../domain/grading';
+import { mkSession } from '../domain/testkit';
 
 let n = 0;
 function setup(lock: 'acquired' | 'busy' | 'unsupported' = 'acquired', repo?: Repo) {
@@ -19,6 +23,177 @@ function setup(lock: 'acquired' | 'busy' | 'unsupported' = 'acquired', repo?: Re
 const draft = (o: Partial<SetupDraft> = {}): SetupDraft => ({
   profileId: 'dcat', scope: 'drill', mode: 'omr', policy: 'soft', sectionIdx: 2, drillCount: 3, drillSeconds: 180,
   setId: null, newSetName: '', startNo: 1, numberingMode: 'continuous', label: '', ...o,
+});
+
+async function externalDone(t: ReturnType<typeof setup>, profileId = 'dcat') {
+  await t.store.getState().boot();
+  const id = (await t.store.getState().startSession(draft({ mode: 'external', profileId, label: '외부 모의 2회' })))!;
+  const count = t.store.getState().data.sessions.find(s => s.id === id)!.plan.length;
+  for (let idx = 0; idx < count; idx++) {
+    await t.store.getState().act(id, { type: 'startSection' });
+    await t.store.getState().act(id, { type: 'endSection' });
+  }
+  return id;
+}
+
+describe('P2 persistence and actions', () => {
+  it('external question views use stored answers even without answer events and never infer question times', () => {
+    const s = { ...mkSession({ mode: 'external' }), externalAnswers: [2, null, 3, 4, 5] };
+    const ps = { id: 'set1', name: 'external', profileId: 'dcat', layout: [], choices: 5,
+      numbering: { startNo: 1, mode: 'continuous' as const }, key: [2, 1, 3, 4, 5], ranges: [],
+      createdAt: 0, updatedAt: 0, schemaVersion: 1 };
+    const views = questionViews(s, ps);
+    expect(views.map(v => v.answer)).toEqual([2, null, 3, 4, 5]);
+    expect(views.map(v => v.correct)).toEqual([true, false, true, true, true]);
+    expect(views.every(v => v.timeSec === null && v.answeredAt === null && v.inLimitAnswer === v.answer)).toBe(true);
+  });
+
+  it('seeds once; deleting the first-round import survives reboot', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const loaded = await t.repo.loadAll();
+    expect(loaded.data.imports).toHaveLength(1);
+    expect(loaded.data.imports[0]).toMatchObject({ id: 'seed-passsidae-dcat-r1', status: 'confirmed', overtime: true });
+    expect(loaded.data.taxonomy).toEqual([buildSeedTaxonomy()]);
+    expect(loaded.templates).toEqual({ dcat: buildDcatTemplate() });
+    expect(loaded.data.settings.seeded).toBe(true);
+    await t.store.getState().deleteImport('seed-passsidae-dcat-r1');
+    const next = setup('acquired', t.repo);
+    await next.store.getState().boot();
+    expect(next.store.getState().data.imports).toEqual([]);
+    expect((await t.repo.loadAll()).data.imports).toEqual([]);
+    expect(next.store.getState().data.taxonomy).toEqual(loaded.data.taxonomy);
+    expect(next.store.getState().templates).toEqual(loaded.templates);
+  });
+
+  it('a failed seed write leaves seeded unset and boot retry completes the seed', async () => {
+    const repo = createDexieRepo(new AptDb(`store-test-${++n}`));
+    let fail = true;
+    const t = setup('acquired', { ...repo, saveTemplate: async (id, ranges) => {
+      if (fail) throw new Error('seed write failed');
+      await repo.saveTemplate(id, ranges);
+    } });
+    await t.store.getState().boot();
+    expect(t.store.getState().ready).toBe(false);
+    expect(t.store.getState().bootError).toBe('seed write failed');
+    expect((await repo.loadAll()).data.settings.seeded).toBeUndefined();
+    fail = false;
+    await t.store.getState().boot();
+    expect(t.store.getState().ready).toBe(true);
+    expect((await repo.loadAll()).data.imports).toHaveLength(1);
+    expect((await repo.loadAll()).data.settings.seeded).toBe(true);
+  });
+
+  it('external grading parses both inputs, persists a full set, derives untimed answers and backs up once', async () => {
+    const t = setup();
+    const id = await externalDone(t);
+    t.setNow(1_100_000);
+    const answers = '①２30-'.repeat(15);
+    const key = '１２③4⑤'.repeat(15);
+    const results = await Promise.all([
+      t.store.getState().gradeExternal(id, answers, key),
+      t.store.getState().gradeExternal(id, answers, key),
+    ]);
+    expect(results).toEqual([{ ok: true }, { ok: true }]);
+    const loaded = await t.repo.loadAll();
+    expect(loaded.data.sets).toHaveLength(1);
+    const s = loaded.data.sessions[0];
+    const ps = loaded.data.sets[0];
+    expect(s).toMatchObject({ status: 'graded', setId: ps.id, externalAnswers: Array.from({ length: 15 }, () => [1, 2, 3, null, null]).flat() });
+    expect(ps).toMatchObject({ name: '외부 모의 2회', profileId: 'dcat', ranges: buildDcatTemplate(), key: Array.from({ length: 15 }, () => [1, 2, 3, 4, 5]).flat(), schemaVersion: 1 });
+    expect(ps.layout.map(p => p.count)).toEqual([20, 15, 20, 10, 10]);
+    const views = questionViews(s, ps);
+    expect(views).toHaveLength(75);
+    expect(views.map(v => v.answer)).toEqual(s.externalAnswers);
+    expect(views.every(v => v.inLimitAnswer === v.answer && v.timeSec === null && v.answeredAt === null && !v.overtime)).toBe(true);
+    expect(summarize(views, s)).toMatchObject({ n: 75, correct: 45, inLimitCorrect: 45, unanswered: 30 });
+    expect(t.store.getState().screen).toEqual({ name: 'result', sessionId: id });
+    expect(t.downloads).toHaveLength(1);
+    expect(loaded.meta.lastBackupAt).toBe(1_100_000);
+    const next = setup('acquired', t.repo);
+    await next.store.getState().boot();
+    expect(next.store.getState().data.sessions[0]).toEqual(s);
+  });
+
+  it.each([
+    ['1'.repeat(74), '1'.repeat(75)],
+    ['1'.repeat(76), '1'.repeat(75)],
+    ['1'.repeat(75), '1'.repeat(74)],
+    ['1'.repeat(75), '1'.repeat(76)],
+    ['x' + '1'.repeat(74), '1'.repeat(75)],
+    ['1'.repeat(75), '6' + '1'.repeat(74)],
+  ])('external grading refuses length mismatches or invalid characters', async (answers, key) => {
+    const t = setup();
+    const id = await externalDone(t);
+    const before = await t.repo.loadAll();
+    const result = await t.store.getState().gradeExternal(id, answers, key);
+    expect(result.ok).toBe(false);
+    expect(result).toHaveProperty('reason', expect.any(String));
+    expect(await t.repo.loadAll()).toEqual(before);
+    expect(t.downloads).toEqual([]);
+  });
+
+  it('LG external grading expects 80 answers and has no DCAT template', async () => {
+    const t = setup();
+    const id = await externalDone(t, 'lg-wayfit');
+    expect((await t.store.getState().gradeExternal(id, '1'.repeat(75), '1'.repeat(75))).ok).toBe(false);
+    await t.store.getState().saveSettings({ autoBackupDownload: false });
+    expect(await t.store.getState().gradeExternal(id, '1'.repeat(80), '1'.repeat(80))).toEqual({ ok: true });
+    expect((await t.repo.loadAll()).data.sets[0]).toMatchObject({ profileId: 'lg-wayfit', ranges: [] });
+    expect(t.downloads).toEqual([]);
+  });
+
+  it('ranges persist after reboot and templates are copied only to new DCAT full sets', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft({ scope: 'full', sectionIdx: null })))!;
+    const setId = t.store.getState().data.sessions[0].setId!;
+    expect(t.store.getState().data.sets[0].ranges).toEqual(buildDcatTemplate());
+    await t.store.getState().act(id, { type: 'abandon' });
+    const ranges = [{ from: 0, to: 74, familyId: '자료해석', leafId: '자료계산(표)' }];
+    t.setNow(1_001_000);
+    await t.store.getState().saveRanges(setId, ranges);
+    ranges[0].familyId = 'caller mutation';
+    await t.store.getState().saveTemplateFromSet(setId);
+    const next = setup('acquired', t.repo);
+    await next.store.getState().boot();
+    const saved = [{ from: 0, to: 74, familyId: '자료해석', leafId: '자료계산(표)' }];
+    expect(next.store.getState().data.sets[0]).toMatchObject({ ranges: saved, updatedAt: 1_001_000 });
+    expect(next.store.getState().templates.dcat).toEqual(saved);
+    const id2 = (await next.store.getState().startSession(draft({ scope: 'full', sectionIdx: null })))!;
+    const set2 = next.store.getState().data.sets[1];
+    expect(set2.ranges).toEqual(saved);
+    expect(set2.ranges).not.toBe(next.store.getState().templates.dcat);
+    expect(set2.ranges[0]).not.toBe(next.store.getState().templates.dcat[0]);
+    await next.store.getState().saveRanges(set2.id, []);
+    expect(next.store.getState().templates.dcat).toEqual(saved);
+    expect(next.store.getState().data.sets[0].ranges).toEqual(saved);
+    await next.store.getState().act(id2, { type: 'abandon' });
+    for (const overrides of [{ scope: 'section' as const, sectionIdx: 0 }, { scope: 'drill' as const }, { scope: 'full' as const, profileId: 'lg-wayfit', sectionIdx: null }]) {
+      const sid = (await next.store.getState().startSession(draft(overrides)))!;
+      const ps = next.store.getState().data.sets.at(-1)!;
+      expect(ps.ranges).toEqual([]);
+      await next.store.getState().act(sid, { type: 'abandon' });
+    }
+    const externalId = await externalDone(next);
+    await next.store.getState().gradeExternal(externalId, '1'.repeat(75), '1'.repeat(75));
+    expect(next.store.getState().data.sets.at(-1)!.ranges).toEqual(saved);
+  });
+
+  it('adding families preserves existing taxonomy, ignores blank/duplicate names and persists LG taxonomy', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    await t.store.getState().addFamily('dcat', ' 새 유형 ');
+    await t.store.getState().addFamily('dcat', '새 유형');
+    await t.store.getState().addFamily('dcat', ' ');
+    await t.store.getState().addFamily('lg-wayfit', '새 유형');
+    const next = setup('acquired', t.repo);
+    await next.store.getState().boot();
+    const dcat = next.store.getState().data.taxonomy.find(t => t.profileId === 'dcat')!;
+    expect(dcat.families).toEqual([...buildSeedTaxonomy().families, { id: '새 유형', name: '새 유형', sectionHint: [] }]);
+    expect(dcat.leaves).toEqual(buildSeedTaxonomy().leaves);
+    expect(next.store.getState().data.taxonomy.find(t => t.profileId === 'lg-wayfit')).toEqual({ profileId: 'lg-wayfit', families: [{ id: '새 유형', name: '새 유형', sectionHint: [] }], leaves: [] });
+  });
 });
 
 describe('store', () => {

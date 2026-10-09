@@ -5,11 +5,32 @@ import { createDexieRepo } from './repo';
 import { mkSession } from '../domain/testkit';
 import { emptyAllData } from '../domain/backup';
 import { effectiveProfile } from '../domain/profiles';
+import { buildDcatTemplate, buildSeedImport, buildSeedTaxonomy } from '../domain/seed';
 
 let n = 0;
 const fresh = () => createDexieRepo(new AptDb(`repo-test-${++n}`));
 
 describe('repo', () => {
+  it('imports, taxonomy and per-profile templates round-trip; deleting an import preserves the rest', async () => {
+    const repo = fresh();
+    const record = { ...buildSeedImport(123), extra: 'preserve' };
+    const taxonomy = { ...buildSeedTaxonomy(), extra: 'preserve' };
+    const ranges = buildDcatTemplate();
+    await repo.saveImport(record);
+    await repo.saveTaxonomy(taxonomy);
+    await repo.saveTemplate('dcat', ranges);
+    await repo.saveTemplate('lg-wayfit', []);
+    const loaded = await repo.loadAll();
+    expect(loaded.data.imports).toEqual([record]);
+    expect(loaded.data.taxonomy).toEqual([taxonomy]);
+    expect(loaded.templates).toEqual({ dcat: ranges, 'lg-wayfit': [] });
+    await repo.deleteImport(record.id);
+    const after = await repo.loadAll();
+    expect(after.data.imports).toEqual([]);
+    expect(after.data.taxonomy).toEqual([taxonomy]);
+    expect(after.templates).toEqual(loaded.templates);
+  });
+
   it('빈 DB는 기본값', async () => {
     const l = await fresh().loadAll();
     expect(l.data.sessions).toEqual([]);

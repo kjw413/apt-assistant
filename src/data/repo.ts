@@ -2,7 +2,9 @@
 import type { AptDb } from './db';
 import { normalizeAllData } from '../domain/backup';
 import { DEFAULT_SETTINGS } from '../domain/profiles';
-import type { AllData, ExamProfile, ProblemSet, Session, Settings } from '../domain/types';
+import type { AllData, ExamProfile, ImportRecord, ProblemSet, Session, Settings, Taxonomy } from '../domain/types';
+
+type Ranges = ProblemSet['ranges'];
 
 export interface Meta {
   lastBackupAt: number | null;
@@ -12,6 +14,7 @@ export interface Loaded {
   data: AllData;
   meta: Meta;
   alive: Record<string, number>;
+  templates: Record<string, Ranges>;
 }
 
 export interface Repo {
@@ -20,6 +23,10 @@ export interface Repo {
   saveSet(p: ProblemSet): Promise<void>;
   saveProfileOverride(p: ExamProfile): Promise<void>;
   deleteProfileOverride(id: string): Promise<void>;
+  saveImport(i: ImportRecord): Promise<void>;
+  deleteImport(id: string): Promise<void>;
+  saveTaxonomy(t: Taxonomy): Promise<void>;
+  saveTemplate(profileId: string, ranges: Ranges): Promise<void>;
   saveMemo(sessionId: string, text: string): Promise<void>;
   saveSettings(s: Settings): Promise<void>;
   saveMeta(m: Meta): Promise<void>;
@@ -41,6 +48,7 @@ export function createDexieRepo(db: AptDb): Repo {
       );
       const memos: Record<string, string> = {};
       const alive: Record<string, number> = {};
+      const templates: Record<string, Ranges> = {};
       let settings: Settings = { ...DEFAULT_SETTINGS };
       let meta: Meta = { lastBackupAt: null };
       for (const row of kv) {
@@ -48,8 +56,9 @@ export function createDexieRepo(db: AptDb): Repo {
         else if (row.key === 'meta') meta = { lastBackupAt: null, ...(row.value as Partial<Meta>) };
         else if (row.key.startsWith('memo:')) memos[row.key.slice(5)] = String(row.value ?? '');
         else if (row.key.startsWith('alive:')) alive[row.key.slice(6)] = Number(row.value);
+        else if (row.key.startsWith('template:')) templates[row.key.slice(9)] = row.value as Ranges;
       }
-      return { data: { profiles, sets, sessions, memos, imports, taxonomy, aliases, settings }, meta, alive };
+      return { data: { profiles, sets, sessions, memos, imports, taxonomy, aliases, settings }, meta, alive, templates };
     },
     async saveSession(s) {
       await db.sessions.put(s);
@@ -62,6 +71,18 @@ export function createDexieRepo(db: AptDb): Repo {
     },
     async deleteProfileOverride(id) {
       await db.profiles.delete(id);
+    },
+    async saveImport(i) {
+      await db.imports.put(i);
+    },
+    async deleteImport(id) {
+      await db.imports.delete(id);
+    },
+    async saveTaxonomy(t) {
+      await db.taxonomy.put(t);
+    },
+    async saveTemplate(profileId, ranges) {
+      await db.kv.put({ key: `template:${profileId}`, value: ranges });
     },
     async saveMemo(sessionId, text) {
       await db.kv.put({ key: `memo:${sessionId}`, value: text });
