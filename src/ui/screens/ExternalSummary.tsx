@@ -26,6 +26,9 @@ export function ExternalSummary({ sessionId }: { sessionId: string }) {
       </tr>)}</tbody>
     </table>
     <div className={styles.actions}>
+      {session.status === 'external_done' && <button type="button" tabIndex={-1}
+        onMouseDown={e => e.preventDefault()}
+        onClick={() => go({ name: 'externalKey', sessionId })}>채점 입력</button>}
       <button type="button" onClick={() => { void confirmExternal(session.id); }}>확인</button>
     </div>
   </main>;

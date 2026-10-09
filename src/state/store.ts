@@ -12,6 +12,7 @@ import { compatibleSets } from '../ui/screens/setupLogic';
 export type Screen =
   | { name: 'home' } | { name: 'setup' } | { name: 'settings' } | { name: 'blocked' }
   | { name: 'runner'; sessionId: string } | { name: 'key'; sessionId: string }
+  | { name: 'externalKey'; sessionId: string }
   | { name: 'result'; sessionId: string } | { name: 'externalSummary'; sessionId: string };
 export interface AppState {
   ready: boolean; bootError: string | null; screen: Screen; data: AllData; meta: Meta;

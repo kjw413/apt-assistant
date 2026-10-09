@@ -5,6 +5,7 @@ import type { QuestionView } from '../../domain/types';
 import { formatDateTime, formatSec } from '../format';
 import { useApp } from '../useApp';
 import styles from './screens.module.css';
+import { TypeTagger } from './TypeTagger';
 
 type SortColumn = 'q' | 'answer' | 'key' | 'correct' | 'overtime' | 'timeSec' | 'changes';
 const columns: { key: SortColumn; label: string }[] = [
@@ -91,6 +92,7 @@ export function Result({ sessionId }: { sessionId: string }) {
         </tr>)}</tbody>
       </table>
     </details>
+    <TypeTagger key={set.id} setId={set.id} views={views} />
     <div className={styles.actions}>
       <button type="button" onClick={() => go({ name: 'key', sessionId })}>정답 수정</button>
       <button type="button" onClick={() => go({ name: 'home' })}>홈으로</button>
