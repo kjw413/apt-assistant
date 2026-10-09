@@ -100,7 +100,7 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
     <h2 id={`${id}-heading`}>유형 칠하기</h2>
     <p className={styles.muted}>가족과 세부(선택)를 고르고 문항을 클릭하거나 드래그하세요. 같은 세트의 모든 풀이에 적용됩니다.</p>
     <div className={styles.actions} aria-label="유형 가족">
-      {taxonomy?.families.map(family => <button key={family.id} type="button" tabIndex={-1}
+      {taxonomy?.families.map(family => <button key={family.id} type="button"
         onMouseDown={e => e.preventDefault()} aria-pressed={familyId === family.id} disabled={busy || readOnly}
         style={familyId === family.id ? { borderColor: 'var(--accent)', fontWeight: 700 } : undefined}
         onClick={() => { setFamilyId(family.id); setLeafId(''); }}>{family.name}</button>)}
@@ -108,7 +108,7 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
     <div className={styles.field}>
       <label htmlFor={`${id}-new`}>새 유형</label>
       <input id={`${id}-new`} value={newName} disabled={busy || readOnly} onChange={e => setNewName(e.target.value)} />
-      <button type="button" tabIndex={-1} onMouseDown={e => e.preventDefault()}
+      <button type="button" onMouseDown={e => e.preventDefault()}
         disabled={busy || readOnly || !newName.trim()} onClick={() => { void add(); }}>유형 추가</button>
     </div>
     <div className={styles.field}>
@@ -121,9 +121,9 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
     </div>
     {!familyId && <p className={styles.muted}>칠할 가족을 먼저 고르세요</p>}
     {set.profileId === 'dcat' && <div className={styles.actions}>
-      <button type="button" tabIndex={-1} onMouseDown={e => e.preventDefault()} disabled={busy || readOnly}
+      <button type="button" onMouseDown={e => e.preventDefault()} disabled={busy || readOnly}
         onClick={() => { void persist(() => store.getState().saveTemplateFromSet(setId), '기본 틀을 저장했습니다'); }}>기본 틀로 저장</button>
-      <button type="button" tabIndex={-1} onMouseDown={e => e.preventDefault()} disabled={busy || readOnly || !template}
+      <button type="button" onMouseDown={e => e.preventDefault()} disabled={busy || readOnly || !template}
         onClick={() => { void persist(() => store.getState().saveRanges(setId, template ?? []), '기본 틀을 적용했습니다'); }}>기본 틀 적용</button>
     </div>}
     {message && <p role="status" className={styles.muted}>{message}</p>}
@@ -137,7 +137,7 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
         const selected = selection && view.q >= selection[0] && view.q <= selection[1];
         return <li key={view.q}>
           <button type="button" className={styles.listButton} data-testid={`tag-row-${view.q}`} data-tag-q={view.q}
-            tabIndex={-1} onMouseDown={e => e.preventDefault()} disabled={busy || readOnly || !familyId}
+            onMouseDown={e => e.preventDefault()} disabled={busy || readOnly || !familyId}
             style={{ touchAction: 'none', userSelect: 'none', ...(selected ? { borderColor: 'var(--accent)' } : {}) }}
             onPointerDown={event => {
               if (event.button !== 0 || !familyId || saving.current) return;

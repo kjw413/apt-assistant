@@ -8,6 +8,7 @@ import { createAppStore } from '../../state/store';
 import { AppProvider } from '../useApp';
 import { KeyEntry } from './KeyEntry';
 import { Result } from './Result';
+import { Settings } from './Settings';
 
 let n = 0;
 async function gradedSession(guessed = false) {
@@ -35,6 +36,26 @@ async function gradedSession(guessed = false) {
 }
 
 describe('answer key correction', () => {
+  it('Result offers capture linking and keyboard-accessible view buttons only for linked questions', async () => {
+    const t = await gradedSession();
+    t.store.setState(state => ({ data: { ...state.data, sessions: state.data.sessions.map(s => ({ ...s,
+      captures: [{ q: 0, t: 1_000_000, file: 'capture.png' }],
+    })) } }));
+    const html = t.render(Result);
+    expect(html).toContain('캡처 연결');
+    expect(html.match(/>보기<\/button>/g)).toHaveLength(1);
+    expect(html).not.toContain('tabindex="-1"');
+    expect(html).toContain('aria-label="문항별 결과"');
+  });
+  it('Settings shows capture folder and the image file-input fallback when picker API is absent', async () => {
+    const t = await gradedSession();
+    const html = renderToStaticMarkup(createElement(AppProvider, {
+      store: { ...t.store, getInitialState: t.store.getState }, children: createElement(Settings),
+    }));
+    expect(html).toContain('캡처 폴더');
+    expect(html).toContain('캡처 파일 선택');
+    expect(html).toMatch(/<input[^>]*type="file"[^>]*accept="image\/\*"[^>]*multiple=""/);
+  });
   it('Result hides obsolete flag UI when no legacy guesses exist', async () => {
     const t = await gradedSession();
     const html = t.render(Result);

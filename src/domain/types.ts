@@ -109,6 +109,7 @@ export interface Session {
   status: SessionStatus;
   externalAnswers?: (number | null)[]; // 외부 모의 채점 입력(v0.2)
   reasons?: Record<number, 'concept' | 'slip' | 'misread'>; // v0.2
+  captures?: { q: number; t: number; file: string }[]; // ShareX 캡처 연결(v0.3)
   createdAt: number;
   finishedAt?: number;
   backedUpAt?: number;

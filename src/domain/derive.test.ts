@@ -51,6 +51,25 @@ describe('laps', () => {
 });
 
 describe('questionViews', () => {
+  it('external session also uses capture laps only for linked questions', () => {
+    let s = soft2();
+    s = reduce(s, { type: 'endSection' }, 60_000).session;
+    s = {
+      ...s,
+      mode: 'external',
+      externalAnswers: [1, 2, 3],
+      captures: [{ q: 0, t: 15_000, file: 'first.png' }],
+    };
+    expect(questionViews(s, set(null)).slice(0, 3).map(v => v.timeSec)).toEqual([45, null, null]);
+  });
+  it('uses capture laps only for linked questions', () => {
+    let s = soft2();
+    s = reduce(s, { type: 'answer', q: 0, c: 1 }, 10_000).session;
+    s = reduce(s, { type: 'answer', q: 1, c: 2 }, 20_000).session;
+    s = reduce(s, { type: 'endSection' }, 60_000).session;
+    s = { ...s, captures: [{ q: 0, t: 15_000, file: 'first.png' }] };
+    expect(questionViews(s, set(null)).slice(0, 3).map(v => v.timeSec)).toEqual([45, 10, null]);
+  });
   it('번호·답·정오·시간 내 정오·초과·⚑·변경 수', () => {
     let s = soft2();
     s = reduce(s, { type: 'answer', q: 0, c: 1 }, 10_000).session;

@@ -7,6 +7,7 @@ import { ConfirmDialog } from '../ConfirmDialog';
 import { formatDateTime } from '../format';
 import { useApp, useAppStore } from '../useApp';
 import { ProfileEditor } from './ProfileEditor';
+import { directoryPicker } from '../captureFiles';
 import styles from './screens.module.css';
 
 type BackupPreview = { text: string; sessions: number; sets: number; imports: number };
@@ -29,6 +30,11 @@ export function Settings() {
   const restore = useApp(s => s.restore);
   const go = useApp(s => s.go);
   const store = useAppStore();
+  const captureDir = useApp(s => s.captureDir);
+  const captureFiles = useApp(s => s.captureFiles);
+  const setCaptureDir = useApp(s => s.setCaptureDir);
+  const setCaptureFiles = useApp(s => s.setCaptureFiles);
+  const picker = directoryPicker();
   const [notice, setNotice] = useState<string | null>(null);
   const [preview, setPreview] = useState<BackupPreview | null>(null);
   const [estimate, setEstimate] = useState<string | null>(null);
@@ -101,6 +107,21 @@ export function Settings() {
   return (
     <main className={styles.screen}>
       <h1>설정·백업</h1>
+      <section className={styles.section}>
+        <h2>캡처 폴더</h2>
+        <p>{captureDir?.name ?? '지정하지 않음'}</p>
+        {picker ? <button type="button" onClick={() => {
+          void picker().then(setCaptureDir).catch(error => {
+            if (!(error instanceof DOMException && error.name === 'AbortError')) setNotice('캡처 폴더를 지정하지 못했습니다');
+          });
+        }}>폴더 지정</button> : <>
+          <p className={styles.muted}>이 환경은 폴더 선택 API를 지원하지 않습니다. 캡처 파일을 선택하세요.</p>
+          <label className={styles.field}>캡처 파일 선택
+            <input type="file" accept="image/*" multiple onChange={event => setCaptureFiles(Array.from(event.target.files ?? []))} />
+          </label>
+          <p className={styles.muted}>선택한 파일 {captureFiles.length}개 · 다시 열면 파일을 다시 선택하세요.</p>
+        </>}
+      </section>
       <section className={styles.section}>
         <h2>백업</h2>
         <div className={styles.actions}>

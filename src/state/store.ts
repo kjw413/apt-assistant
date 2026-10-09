@@ -2,6 +2,7 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { Meta, Repo } from '../data/repo';
 import { backupFileName, buildBackup, emptyAllData, normalizeAllData, validateBackup } from '../domain/backup';
 import { lastEventT } from '../domain/events';
+import { matchCaptures, type CaptureFile } from '../domain/captures';
 import { parseKey } from '../domain/grading';
 import { buildDcatTemplate, buildSeedImport, buildSeedTaxonomy } from '../domain/seed';
 import { defaultDrillSeconds, effectiveProfile, makePlan, makeSetLayout, validateProfileEdit } from '../domain/profiles';
@@ -16,11 +17,16 @@ export type Screen =
   | { name: 'analysis' }
   | { name: 'result'; sessionId: string } | { name: 'externalSummary'; sessionId: string };
 export interface AppState {
+  captureDir: FileSystemDirectoryHandle | null;
+  captureFiles: File[];
   ready: boolean; bootError: string | null; screen: Screen; data: AllData; meta: Meta;
   templates: Record<string, ProblemSet['ranges']>;
   lockWarning: boolean; persisted: boolean | null; saveError: string | null; toast: string | null;
 }
 export interface AppActions {
+  setCaptureDir(handle: FileSystemDirectoryHandle): Promise<void>;
+  setCaptureFiles(files: File[]): void;
+  linkCaptures(sessionId: string, files: CaptureFile[], shifts?: Record<number, number>): Promise<boolean>;
   boot(): Promise<void>;
   go(screen: Screen): void;
   startSession(draft: SetupDraft): Promise<string | null>;
@@ -255,6 +261,7 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
     }
 
     return {
+      captureDir: null, captureFiles: [],
       ready: false, bootError: null, screen: { name: 'home' }, data: emptyAllData(), meta: { lastBackupAt: null }, templates: {},
       lockWarning: false, persisted: null, saveError: null, toast: null,
 
@@ -275,6 +282,8 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
             const persisted = await repo.requestPersist();
             set({ persisted });
             const loaded = await repo.loadAll();
+            const captureDir = await repo.getKv<FileSystemDirectoryHandle>('captureDir');
+            set({ captureDir: captureDir ?? null });
             const data = normalizeAllData(loaded.data);
             set({ data, meta: { ...loaded.meta }, templates: structuredClone(loaded.templates) });
             await seed();
@@ -549,6 +558,24 @@ export function createAppStore(deps: Deps): StoreApi<AppState & AppActions> {
         if (!writable()) return;
         set(state => ({ data: { ...state.data, settings: { ...state.data.settings, ...patch } } }));
         await save(['settings', () => repo.saveSettings(get().data.settings)]);
+      },
+
+      async setCaptureDir(handle) {
+        if (!writable()) return;
+        set({ captureDir: handle });
+        await save(['captureDir', () => repo.setKv('captureDir', get().captureDir)]);
+      },
+
+      setCaptureFiles(files) {
+        if (writable()) set({ captureFiles: [...files] });
+      },
+
+      async linkCaptures(id, files, shifts) {
+        if (!writable()) return false;
+        const original = get().data.sessions.find(s => s.id === id);
+        if (!original || isFutureDocument(original) || original.finishedAt === undefined) return false;
+        updateSession({ ...original, captures: matchCaptures(original, files, shifts) });
+        return save(sessionWrite(id));
       },
 
       async exportNow() {

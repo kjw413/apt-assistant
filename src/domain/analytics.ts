@@ -108,7 +108,7 @@ export function toCells(data: AllData): Cell[] {
       // Whole-set frequency is independent of how far this attempt progressed.
       if (!external && bounds[view.sectionIdx].start === null) continue;
       // A valid lap remains useful even when the answer key is not known yet.
-      if (!external && view.timeSec !== null) {
+      if (view.timeSec !== null && (!external || session.captures?.some(c => c.q === view.q))) {
         cell.times.push(view.timeSec);
         cell.timeSec = (cell.timeSec ?? 0) + view.timeSec;
         cell.timedN++;

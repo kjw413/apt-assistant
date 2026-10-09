@@ -18,6 +18,8 @@ export interface Loaded {
 }
 
 export interface Repo {
+  getKv<T>(key: string): Promise<T | undefined>;
+  setKv(key: string, value: unknown): Promise<void>;
   loadAll(): Promise<Loaded>;
   saveSession(s: Session): Promise<void>;
   saveSet(p: ProblemSet): Promise<void>;
@@ -39,6 +41,12 @@ export function createDexieRepo(db: AptDb): Repo {
   const tables = () => [db.profiles, db.sets, db.sessions, db.imports, db.taxonomy, db.aliases, db.kv];
 
   return {
+    async getKv<T>(key: string): Promise<T | undefined> {
+      return (await db.kv.get(key))?.value as T | undefined;
+    },
+    async setKv(key, value) {
+      await db.kv.put({ key, value });
+    },
     async loadAll() {
       const [profiles, sets, sessions, imports, taxonomy, aliases, kv] = await db.transaction('r', tables(), () =>
         Promise.all([

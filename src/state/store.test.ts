@@ -26,6 +26,52 @@ const draft = (o: Partial<SetupDraft> = {}): SetupDraft => ({
   setId: null, newSetName: '', startNo: 1, numberingMode: 'continuous', label: '', ...o,
 });
 
+describe('ShareX capture actions', () => {
+  it('persists the directory handle in captureDir and reloads it without backing it up', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const handle = { name: 'ShareX' } as FileSystemDirectoryHandle;
+    await t.store.getState().setCaptureDir(handle);
+    expect(await t.repo.getKv('captureDir')).toEqual(handle);
+    const next = setup('acquired', t.repo);
+    await next.store.getState().boot();
+    expect(next.store.getState().captureDir).toEqual(handle);
+    await next.store.getState().exportNow();
+    expect(next.backupTexts[0]).not.toContain('ShareX');
+  });
+
+  it('links and replaces captures, preserving unknown session fields and schema 1', async () => {
+    const t = setup();
+    await t.store.getState().boot();
+    const id = (await t.store.getState().startSession(draft()))!;
+    await t.store.getState().act(id, { type: 'startSection' });
+    t.setNow(1_030_000);
+    await t.store.getState().act(id, { type: 'finish' });
+    t.store.setState(state => ({ data: { ...state.data, sessions: state.data.sessions.map(s => ({ ...s, unknown: { keep: true } })) } }));
+    await t.store.getState().linkCaptures(id, [
+      { name: 'b.png', t: 1_020_000 }, { name: 'a.png', t: 1_000_000 },
+    ], { 0: 1 });
+    expect((await t.repo.loadAll()).data.sessions[0]).toMatchObject({
+      unknown: { keep: true }, schemaVersion: 1,
+      captures: [{ q: 1, t: 1_000_000, file: 'a.png' }, { q: 2, t: 1_020_000, file: 'b.png' }],
+    });
+    await t.store.getState().linkCaptures(id, [], {});
+    expect((await t.repo.loadAll()).data.sessions[0].captures).toEqual([]);
+  });
+
+  it('blocked stores and future sessions do not write captures or directory handles', async () => {
+    const blocked = setup('busy');
+    await blocked.store.getState().boot();
+    await blocked.store.getState().setCaptureDir({ name: 'blocked' } as FileSystemDirectoryHandle);
+    expect(await blocked.repo.getKv('captureDir')).toBeUndefined();
+    const t = setup();
+    await t.repo.saveSession({ ...mkSession(), schemaVersion: 99 });
+    await t.store.getState().boot();
+    await t.store.getState().linkCaptures('S', [{ name: 'a.png', t: 0 }], {});
+    expect((await t.repo.loadAll()).data.sessions[0].captures).toBeUndefined();
+  });
+});
+
 async function externalDone(t: ReturnType<typeof setup>, profileId = 'dcat') {
   await t.store.getState().boot();
   const id = (await t.store.getState().startSession(draft({ mode: 'external', profileId, label: '외부 모의 2회' })))!;

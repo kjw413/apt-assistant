@@ -2,6 +2,7 @@
 import type { ProblemSet, QuestionView, Session } from './types';
 import { currentAnswers, currentFlags, lastEventT, sectionBounds } from './events';
 import { deadlineOf, pauseIntervals } from './timer';
+import { captureLaps } from './captures';
 
 /** 영역 idx의 문항만, t ≤ until까지 재생한 답. */
 export function answersAt(s: Session, idx: number, until: number): Map<number, number> {
@@ -75,6 +76,7 @@ export function questionViews(s: Session, set: ProblemSet): QuestionView[] {
   const answers = currentAnswers(s);
   const flags = currentFlags(s);
   const lapMap = laps(s);
+  const captureLapMap = captureLaps(s);
   const stats = answerStats(s);
   const views: QuestionView[] = [];
 
@@ -103,7 +105,7 @@ export function questionViews(s: Session, set: ProblemSet): QuestionView[] {
         key,
         correct: graded ? answer === key : null,
         inLimitCorrect: graded ? inLimitAnswer === key : null,
-        timeSec: externalAnswers ? null : lapMap.get(q) ?? null,
+        timeSec: captureLapMap.get(q) ?? (externalAnswers ? null : lapMap.get(q) ?? null),
       });
     }
   });

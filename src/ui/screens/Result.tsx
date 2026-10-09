@@ -6,6 +6,8 @@ import { formatDateTime, formatSec } from '../format';
 import { useApp } from '../useApp';
 import styles from './screens.module.css';
 import { TypeTagger } from './TypeTagger';
+import { CaptureLinker } from './CaptureLinker';
+import { CaptureImage } from './CaptureImage';
 
 type SortColumn = 'q' | 'answer' | 'key' | 'correct' | 'overtime' | 'timeSec' | 'changes';
 const columns: { key: SortColumn; label: string }[] = [
@@ -45,6 +47,7 @@ export function Result({ sessionId }: { sessionId: string }) {
     <h1>결과</h1>
     <p>{set.name} · {session.attempt}회차</p>
     <p className={styles.muted}>{formatDateTime(session.finishedAt ?? session.createdAt)}</p>
+    <CaptureLinker key={session.id} session={session} views={views} />
     <div className={styles.scoreCards}>
       <div className={styles.scoreCard}><span>시간 내 점수</span><strong data-testid="score-inlimit">{summary.inLimitCorrect}/{summary.n}</strong></div>
       <div className={styles.scoreCard}><span>전체 점수</span><strong data-testid="score-total">{summary.correct}/{summary.n}</strong></div>
@@ -77,18 +80,19 @@ export function Result({ sessionId }: { sessionId: string }) {
     <details className={styles.section}>
       <summary>문항별 결과</summary>
       <p className={styles.muted}>열 이름을 누르면 정렬합니다. 한 번 더 누르면 순서를 바꿉니다.</p>
-      <table className={`${styles.table} ${styles.questionTable}`}>
+      <table aria-label="문항별 결과" className={`${styles.table} ${styles.questionTable}`}>
         <thead><tr>{columns.map(column => <th key={column.key} scope="col"
           aria-sort={sort.column === column.key ? sort.descending ? 'descending' : 'ascending' : 'none'}>
           <button type="button" onClick={() => setSort(previous => ({ column: column.key, descending: previous.column === column.key && !previous.descending }))}>
             {column.label}{sort.column === column.key && <span aria-hidden="true">{sort.descending ? ' ↓' : ' ↑'}</span>}
           </button>
-        </th>)}</tr></thead>
+        </th>)}<th scope="col">캡처</th></tr></thead>
         <tbody>{sorted.map(v => <tr key={v.q}>
           <th scope="row">{v.no}{!started.has(v.sectionIdx) && <span className={styles.muted}> 미응시</span>}</th>
           <td>{v.answer ?? '—'}</td><td>{v.key ?? '—'}</td>
           <td>{!started.has(v.sectionIdx) || v.correct === null ? '—' : v.correct ? '○' : '×'}</td>
-          <td>{v.overtime ? '초과' : '—'}</td><td>{v.timeSec === null ? '—' : Number(v.timeSec.toFixed(1))}</td><td>{v.changes}</td>
+          <td>{v.overtime ? '초과' : '—'}</td><td data-testid={`question-time-${v.q}`}>{v.timeSec === null ? '—' : Number(v.timeSec.toFixed(1))}</td><td>{v.changes}</td>
+          <td>{session.captures?.find(c => c.q === v.q) && <CaptureImage name={session.captures.find(c => c.q === v.q)!.file} />}</td>
         </tr>)}</tbody>
       </table>
     </details>

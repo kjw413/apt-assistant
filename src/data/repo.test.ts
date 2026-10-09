@@ -11,6 +11,14 @@ let n = 0;
 const fresh = () => createDexieRepo(new AptDb(`repo-test-${++n}`));
 
 describe('repo', () => {
+  it('captureDir kv survives data replacement and stays outside exported data', async () => {
+    const repo = fresh();
+    const handle = { name: 'ShareX' };
+    await repo.setKv('captureDir', handle);
+    await repo.replaceAll(emptyAllData());
+    expect(await repo.getKv('captureDir')).toEqual(handle);
+    expect(JSON.stringify((await repo.loadAll()).data)).not.toContain('ShareX');
+  });
   it('imports, taxonomy and per-profile templates round-trip; deleting an import preserves the rest', async () => {
     const repo = fresh();
     const record = { ...buildSeedImport(123), extra: 'preserve' };
