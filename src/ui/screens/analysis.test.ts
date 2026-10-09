@@ -5,8 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { AptDb } from '../../data/db';
 import { createDexieRepo } from '../../data/repo';
 import { effectiveProfile, makePlan, makeSetLayout } from '../../domain/profiles';
+import { buildSeedImport } from '../../domain/seed';
 import type { ProblemSet, Session } from '../../domain/types';
-import type { Screen } from '../../state/store';
 import { createAppStore } from '../../state/store';
 import { App } from '../App';
 import { AppProvider } from '../useApp';
@@ -23,9 +23,7 @@ async function analysisFixture() {
   const render = (children: ReactNode) => renderToStaticMarkup(createElement(AppProvider,
     { store: { ...store, getInitialState: store.getState }, children }));
   const renderAnalysis = () => {
-    (store as unknown as { setState(next: { screen: unknown }): void }).setState({
-      screen: { name: 'analysis' } as unknown as Screen,
-    });
+    store.getState().go({ name: 'analysis' });
     return render(createElement(App));
   };
   return { db, store, render, renderAnalysis };
@@ -96,6 +94,20 @@ describe('P4 분석 UI', () => {
     } finally { await t.db.delete(); }
   });
 
+  it('기록이 없어도 빈 표와 시간 데이터 없음 안내를 유지한다', async () => {
+    const t = await analysisFixture();
+    try {
+      t.store.setState(state => ({ data: { ...state.data, imports: [] } }));
+      const html = t.renderAnalysis();
+      expect(html).toContain('분석할 기록이 없습니다');
+      const familyTable = html.match(/<table[^>]*aria-label="가족별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      expect(familyTable).toContain('<tbody></tbody>');
+      expect(html).toContain('시간 데이터 0/0문항');
+      expect(html).toContain('data-testid="scatter"');
+      expect(html).toContain('시간 데이터 없음');
+    } finally { await t.db.delete(); }
+  });
+
   it('첫 풀이의 유효한 시간만 산점도와 속도 훈련에 쓰고 재풀이는 기본으로 제외한다', async () => {
     const t = await analysisFixture();
     try {
@@ -113,8 +125,8 @@ describe('P4 분석 UI', () => {
         plan: makePlan(profile, set, 'full'), status: 'graded',
         events: [
           { k: 'sectionStart', s: 0, t: 0 },
-          ...Array.from({ length: 4 }, (_, q) => ({ k: 'answer' as const, q, c: 1, t: (q + 1) * 90_000 })),
-          { k: 'sectionEnd', s: 0, reason: 'manual', t: 360_000 },
+          ...Array.from({ length: 4 }, (_, q) => ({ k: 'answer' as const, q, c: 1, t: q === 3 ? 1_300_000 : (q + 1) * 90_000 })),
+          { k: 'sectionEnd', s: 0, reason: 'manual', t: 1_300_000 },
         ],
         createdAt: 0, finishedAt: 360_000, appVersion: '0.1.0', schemaVersion: 1,
       };
@@ -128,6 +140,31 @@ describe('P4 분석 UI', () => {
       const speed = html.match(/data-testid="verdict-speed"[^>]*>([\s\S]*?)<\/ul>/)?.[1] ?? '';
       expect(speed).toContain('명제추리');
       expect(html).not.toContain('시간 데이터 없음');
+      const sectionTable = html.match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const firstSection = sectionTable.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
+      expect(firstSection).toMatch(/data-label="초과"[^>]*>1(?:\b|\/)/);
+      expect(firstSection).toMatch(/data-label="속도 손실"[^>]*>1(?:\b|\/)/);
+      // An earlier hard-policy record must not suppress the later soft-policy loss.
+      const hard: Session = { ...session, id: 'timed-hard', policy: 'hard',
+        events: session.events.map(event => ({ ...event, t: Math.min(event.t, 360_000) })) };
+      t.store.setState(state => ({ data: { ...state.data, sessions: [hard, session] } }));
+      const mixed = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const mixedSection = mixed.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
+      expect(mixedSection).toMatch(/data-label="속도 손실"[^>]*>1(?:\b|\/)/);
+      t.store.setState(state => ({ data: { ...state.data, imports: [buildSeedImport(1_000_000)] } }));
+      const withImport = t.renderAnalysis();
+      const importedSections = withImport.match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const importedFirst = importedSections.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
+      expect(importedFirst).toMatch(/data-label="미응답"[^>]*>32(?:\b|\/)/);
+      expect(importedFirst).toContain('응답 데이터 40/60');
+      expect(withImport).toContain('1:40'); // The soft record used 100 seconds past its deadline.
+      t.store.setState(state => ({ data: { ...state.data, imports: [], sessions: [{
+        ...session, mode: 'external', externalAnswers: Array(75).fill(1),
+      }] } }));
+      const externalSections = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const externalFirst = externalSections.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
+      expect(externalFirst).toMatch(/data-label="초과"[^>]*>—/);
+      expect(externalFirst).toMatch(/data-label="속도 손실"[^>]*>—/);
     } finally { await t.db.delete(); }
   });
 });
