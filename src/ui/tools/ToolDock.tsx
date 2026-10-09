@@ -35,7 +35,7 @@ export function ToolDock(props: {
 }) {
   const { sessionId, tools, calcKeyboard, memo, onMemo } = props;
   const [state, setState] = useState<CalcState>(CALC_INITIAL);
-  const [selection, setSelection] = useState({ tools, tab: tools.tab, calc: tools.calc });
+  const [selection, setSelection] = useState({ tools, tab: tools.tab });
   const memoRef = useRef<HTMLTextAreaElement>(null);
   const paintRef = useRef<PaintHandle>(null);
   const penMenuRef = useRef<HTMLDivElement>(null);
@@ -44,7 +44,7 @@ export function ToolDock(props: {
 
   // A new section is identified by its tools object, including identical defaults.
   if (selection.tools !== tools) {
-    setSelection({ tools, tab: tools.tab, calc: tools.calc });
+    setSelection({ tools, tab: tools.tab });
   }
   const tab = tools.allowed[selection.tab]
     ? selection.tab
@@ -180,16 +180,9 @@ export function ToolDock(props: {
           </div>
         </div>
       </div>
-      <div className={styles.calculator} hidden={!tools.allowed.calc} data-folded={selection.calc === 'collapsed'}>
+      <div className={styles.calculator} hidden={!tools.allowed.calc}>
         <div className={styles.toolHeader}>
           <span className={styles.inputTarget}>계산기</span>
-          <button
-            type="button" tabIndex={-1} data-testid="calc-toggle" className={styles.calcToggle}
-            aria-label={selection.calc === 'open' ? '계산기 접기' : '계산기 펼치기'}
-            aria-expanded={selection.calc === 'open'}
-            onMouseDown={event => event.preventDefault()}
-            onClick={() => setSelection(current => ({ ...current, calc: current.calc === 'open' ? 'collapsed' : 'open' }))}
-          >{selection.calc === 'open' ? '접기' : '펼치기'}</button>
         </div>
         <Calculator state={state} onPress={onPress} />
       </div>

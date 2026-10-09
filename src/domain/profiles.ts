@@ -6,9 +6,8 @@ import {
 } from './types';
 
 const ALLOWED_ALL = { calc: true, memo: true, paint: true };
-const TOOLS_COLLAPSED: SectionTools = { allowed: ALLOWED_ALL, calc: 'collapsed', tab: 'memo' };
 const TOOLS_OPEN: SectionTools = { allowed: ALLOWED_ALL, calc: 'open', tab: 'memo' };
-const TOOLS_LOCKED: SectionTools = { allowed: { calc: false, memo: false, paint: false }, calc: 'collapsed', tab: 'memo' };
+const TOOLS_LOCKED: SectionTools = { allowed: { calc: false, memo: false, paint: false }, calc: 'open', tab: 'memo' };
 
 function deepFreeze<T>(o: T): T {
   if (o && typeof o === 'object' && !Object.isFrozen(o)) {
@@ -36,15 +35,15 @@ function profile(id: string, name: string, sections: SectionDef[]): ExamProfile 
 
 export const BUILTIN_PROFILES: readonly ExamProfile[] = deepFreeze([
   profile('dcat', '두산 DCAT', [
-    section('verbal-logic', '언어논리', 20, 1200, TOOLS_COLLAPSED),
-    section('verbal-expression', '언어표현', 15, 600, TOOLS_COLLAPSED),
+    section('verbal-logic', '언어논리', 20, 1200, TOOLS_OPEN),
+    section('verbal-expression', '언어표현', 15, 600, TOOLS_OPEN),
     section('numerical', '수리자료분석', 20, 1200, TOOLS_OPEN),
     section('spatial', '공간추리', 10, 450, TOOLS_LOCKED),
     section('figure', '도형추리', 10, 450, TOOLS_LOCKED),
   ]),
   profile('lg-wayfit', 'LG Way Fit', [
-    section('verbal-comprehension', '언어이해', 20, 1200, TOOLS_COLLAPSED),
-    section('verbal-reasoning', '언어추리', 20, 1200, TOOLS_COLLAPSED),
+    section('verbal-comprehension', '언어이해', 20, 1200, TOOLS_OPEN),
+    section('verbal-reasoning', '언어추리', 20, 1200, TOOLS_OPEN),
     section('data-interpretation', '자료해석', 20, 1200, TOOLS_OPEN),
     section('creative-math', '창의수리', 20, 1200, TOOLS_OPEN),
   ]),
@@ -116,7 +115,7 @@ function planPart(
     sectionId, name, qFrom, qTo: qFrom + count - 1, limitSec, choices,
     paceSec: limitSec / count,
     breakSec,
-    tools: structuredClone(def ? def.tools : TOOLS_COLLAPSED),
+    tools: structuredClone(def ? def.tools : TOOLS_OPEN),
   };
 }
 

@@ -157,10 +157,15 @@ test('도구 비율: 오른쪽 330px 도구 열, 메모 255px, 계산기 5행, �
     expect(Math.abs(listBox.height - remainingHeight)).toBeLessThanOrEqual(1);
     expect(Math.abs(listBox.y + listBox.height - (toolsBox.y + toolsBox.height))).toBeLessThanOrEqual(1);
     expect(await list.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-    // Folding tools in the right column must not change the left column's height.
-    await page.getByTestId('calc-toggle').click();
-    expect(Math.abs((await list.boundingBox())!.height - listBox.height)).toBeLessThanOrEqual(1);
   } finally { await ctx.close(); }
+});
+
+test('언어논리도 계산기는 펼친 채 시작하고 접기 버튼이 없다', async () => {
+  const { ctx, page } = await launch('runner-calc-open');
+  await startDrill(page, { section: '언어논리', count: 3 });
+  await expect(page.getByTestId('calc-key-7')).toBeVisible();
+  await expect(page.getByTestId('calc-toggle')).toHaveCount(0);
+  await ctx.close();
 });
 
 test('DCAT 공간추리: 도구 잠금', async () => {
@@ -176,7 +181,6 @@ test('DCAT 공간추리: 도구 잠금', async () => {
 test('340×530 창: 가로 스크롤 없음, OMR 4행 이상', async () => {
   const { ctx, page } = await launch('runner-small', { viewport: { width: 340, height: 530 } });
   await startDrill(page, { section: '수리자료분석', count: 10 });
-  await expect(page.getByTestId('calc-toggle')).toHaveAttribute('aria-expanded', 'true');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(340);
   const visible = await page.locator('[data-testid^="omr-row-"]').evaluateAll(rows =>
     rows.filter(r => {

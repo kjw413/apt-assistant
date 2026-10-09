@@ -25,18 +25,18 @@ describe('내장 프로필(교재 값)', () => {
     expect(p.sections.map(s => s.seconds)).toEqual([1200, 600, 1200, 450, 450]);
     expect(p.choices).toBe(5);
   });
-  it('DCAT 공간추리·도형추리는 도구 잠금, 나머지는 허용, 수리는 계산기 펼침', () => {
+  it('DCAT 공간추리·도형추리는 도구 잠금, 나머지는 허용, 계산기는 모두 펼침', () => {
     const p = dcat();
     expect(p.sections[3].tools.allowed).toEqual({ calc: false, memo: false, paint: false });
     expect(p.sections[4].tools.allowed).toEqual({ calc: false, memo: false, paint: false });
     for (const s of p.sections.slice(0, 3)) expect(s.tools.allowed).toEqual({ calc: true, memo: true, paint: true });
-    expect(p.sections.map(s => s.tools.calc).slice(0, 3)).toEqual(['collapsed', 'collapsed', 'open']);
+    expect(p.sections.map(s => s.tools.calc).slice(0, 3)).toEqual(['open', 'open', 'open']);
   });
   it('LG: 4영역 각 20문항 1200초', () => {
     const p = lg();
     expect(p.sections.map(s => s.name)).toEqual(['언어이해', '언어추리', '자료해석', '창의수리']);
     expect(p.sections.every(s => s.questions === 20 && s.seconds === 1200)).toBe(true);
-    expect(p.sections.map(s => s.tools.calc)).toEqual(['collapsed', 'collapsed', 'open', 'open']);
+    expect(p.sections.map(s => s.tools.calc)).toEqual(['open', 'open', 'open', 'open']);
   });
   it('공통 기본 규칙', () => {
     for (const p of BUILTIN_PROFILES) {

@@ -2,7 +2,7 @@
 import { createSession } from './session';
 import type { SectionPlan, SectionTools, Session } from './types';
 
-export const ALL_TOOLS: SectionTools = { allowed: { calc: true, memo: true, paint: true }, calc: 'collapsed', tab: 'memo' };
+export const ALL_TOOLS: SectionTools = { allowed: { calc: true, memo: true, paint: true }, calc: 'open', tab: 'memo' };
 
 export function mkPlan(parts: { count: number; limitSec: number; breakSec?: number }[]): SectionPlan[] {
   let q = 0;

@@ -11,7 +11,7 @@ export type ToolName = 'calc' | 'memo' | 'paint';
 
 export interface SectionTools {
   allowed: Record<ToolName, boolean>; // false = 잠금
-  calc: 'open' | 'collapsed'; // 허용될 때 계산기 기본 표시
+  calc: 'open' | 'collapsed'; // 예전 접힘 설정. 계산기는 항상 펼쳐 두며, 저장 형식 호환을 위해서만 남긴다
   tab: 'memo' | 'paint'; // 허용될 때 기본 탭
 }
 

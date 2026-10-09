@@ -75,7 +75,7 @@
   color: #20242a;
   font-weight: 700;
 }
-.dock .headerClear, .dock .calcToggle { margin-left: auto; padding: 2px 6px; font-size: 11px; line-height: 16px; color: #555b63; }
+.dock .headerClear { margin-left: auto; padding: 2px 6px; font-size: 11px; line-height: 16px; color: #555b63; }
 .headerActions { position: relative; display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .dock .gearButton { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px; padding: 0; color: #555b63; }
 .dock .gearButton[aria-expanded='true'] { border-color: #245dcc; color: #245dcc; }
@@ -167,8 +167,6 @@
   gap: 6px;
   margin: 0 8px 8px;
 }
-.calculator[data-folded='true'] .keypad { display: none; }
-.calculator[data-folded='true'] .calcReadout { height: 60px; }
 .keypad .calcKey, .keypad .equalsKey { padding: 0; font-size: 15px; }
 .keypad .equalsKey { background: #e8002d; border-color: #e8002d; color: #fff; }
 .keypad .equalsKey:hover { background: #c90027; }
