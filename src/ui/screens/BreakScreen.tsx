@@ -26,8 +26,8 @@ export function BreakScreen(props: {
       <h2>다음 영역: {plan.name}</h2>
       <p>{idx + 1}/{total}</p>
       <p>{rangeLabel}</p>
-      <p>시간 {formatMmSs(plan.limitSec)}</p>
-      <p>문항당 페이스 {Math.round(plan.paceSec)}초</p>
+      <p>제한 시간 {formatMmSs(plan.limitSec)}</p>
+      <p>문항당 기준 시간 {Math.round(plan.paceSec)}초</p>
       <p>{toolsLabel}</p>
       {automatic && (
         <p>자동 시작까지 {Math.max(0, Math.ceil((autoStartAt - now) / 1000))}초</p>

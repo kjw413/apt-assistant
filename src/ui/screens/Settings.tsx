@@ -102,7 +102,7 @@ export function Settings() {
       setBusy(false);
     }
   };
-  const currentCounts = `현재: 세션 ${data.sessions.length}, 세트 ${data.sets.length}, 가져오기 ${data.imports.length}`;
+  const currentCounts = `현재: 풀이 기록 ${data.sessions.length}개, 문제집 ${data.sets.length}개, 가져온 기록 ${data.imports.length}개`;
   if (profileId) return <ProfileEditor profileId={profileId} onClose={() => setProfileId(null)} />;
   return (
     <main className={styles.screen}>
@@ -130,21 +130,21 @@ export function Settings() {
         <label className={styles.field}>백업 파일 복원
           <input type="file" accept="application/json,.json" disabled={busy} onChange={event => { void chooseFile(event); }} />
         </label>
-        <p className={styles.muted}>미백업 {unbackedCount(data, meta)} · 마지막 백업 {meta.lastBackupAt === null ? '없음' : formatDateTime(meta.lastBackupAt)}</p>
+        <p className={styles.muted}>백업 안 된 기록 {unbackedCount(data, meta)}개 · 마지막 백업 {meta.lastBackupAt === null ? '없음' : formatDateTime(meta.lastBackupAt)}</p>
         {notice && <p role={notice === '복원했습니다' ? 'status' : 'alert'} className={notice === '복원했습니다' ? styles.notice : styles.error}>{notice}</p>}
       </section>
       <section className={styles.section}>
-        <h2>동작</h2>
+        <h2>알림</h2>
         <label className={styles.checkbox}><input type="checkbox" checked={data.settings.autoBackupDownload} onChange={event => { void saveSettings({ autoBackupDownload: event.target.checked }); }} />세션 종료 시 자동 백업</label>
         <label className={styles.checkbox}><input type="checkbox" checked={data.settings.sound} onChange={event => { void saveSettings({ sound: event.target.checked }); }} />소리</label>
-        <label className={styles.checkbox}><input type="checkbox" checked={data.settings.flash} onChange={event => { void saveSettings({ flash: event.target.checked }); }} />점멸</label>
+        <label className={styles.checkbox}><input type="checkbox" checked={data.settings.flash} onChange={event => { void saveSettings({ flash: event.target.checked }); }} />화면 깜빡임</label>
       </section>
       <section className={styles.section}>
-        <h2>저장소</h2><p>영속 저장: {persisted === true ? '예' : '아니오'}</p>
+        <h2>저장소</h2><p>브라우저가 기록을 지우지 않도록 보호: {persisted === true ? '켜짐' : '꺼짐 (백업 파일을 꼭 보관하세요)'}</p>
         {estimate && <p className={styles.muted}>{estimate}</p>}
       </section>
       <section className={styles.section}>
-        <h2>프로필</h2>
+        <h2>시험별 시간·도구 설정</h2>
         {['dcat', 'lg-wayfit'].map(id => <button type="button" className={styles.listButton} key={id} onClick={() => setProfileId(id)}>{effectiveProfile(id, data.profiles).name} 조정</button>)}
       </section>
       <section className={styles.section}><p>앱 버전 {APP_VERSION} · 스키마 {SCHEMA_VERSION}</p></section>

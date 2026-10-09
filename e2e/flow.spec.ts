@@ -32,7 +32,7 @@ test('정답 수정: 저장된 123을 124로 바꾸면 점수가 갱신되고 �
     await expect(page.getByTestId('score-total')).toHaveText('3/3');
     await expect(page.getByTestId('score-inlimit')).toHaveText('3/3');
     await page.reload();
-    await page.getByRole('button', { name: /시간 내 3\/3 · 전체 3\/3/ }).click();
+    await page.getByRole('button', { name: /제한 시간 안 3\/3 · 전체 3\/3/ }).click();
     await expect(page.getByTestId('score-total')).toHaveText('3/3');
     expect(downloads).toHaveLength(1);
   } finally { await ctx.close(); }

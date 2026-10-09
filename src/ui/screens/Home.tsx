@@ -31,8 +31,8 @@ export function Home() {
       <button type="button" onClick={() => go({ name: 'analysis' })}>분석</button>
       <button type="button" onClick={() => { void exportNow(); }}>지금 내보내기</button>
     </div>
-    <p className={styles.muted}>저장된 세션 {data.sessions.length}개</p>
-    <p data-testid="unbacked" className={styles.summary}>미백업 {unbackedCount(data, meta)}</p>
+    <p className={styles.muted}>저장된 기록 {data.sessions.length}개</p>
+    <p data-testid="unbacked" className={styles.summary}>백업 안 된 기록 {unbackedCount(data, meta)}개</p>
     {future.length > 0 && <section className={styles.section}>
       <h2>새 버전 세션</h2>
       <ul className={styles.list}>{future.map(s => <li key={s.id}>
@@ -49,7 +49,7 @@ export function Home() {
       {waiting.length === 0 ? <p className={styles.muted}>채점 대기 세션이 없습니다</p> :
         <ul className={styles.list}>{waiting.map(s => <li key={s.id}>
           <button className={styles.listButton} type="button" onClick={() => go({ name: 'key', sessionId: s.id })}>
-            <span>{sets.get(s.setId ?? '')?.name ?? s.label ?? '문제 세트'}</span>
+            <span>{sets.get(s.setId ?? '')?.name ?? s.label ?? '문제집'}</span>
             <span className={styles.muted}>{formatDateTime(s.finishedAt ?? s.createdAt)}</span>
           </button>
         </li>)}</ul>}
@@ -62,15 +62,15 @@ export function Home() {
           const summary = set ? summarize(questionViews(s, set), s) : null;
           return <li key={s.id}>
             <button className={styles.listButton} type="button" onClick={() => go({ name: 'result', sessionId: s.id })}>
-              <span>{formatDateTime(s.finishedAt ?? s.createdAt)} · {set?.name ?? s.label ?? '문제 세트'}</span>
-              <span>{summary ? `시간 내 ${summary.inLimitCorrect}/${summary.n} · 전체 ${summary.correct}/${summary.n}` : '문제 세트를 찾을 수 없습니다'}</span>
+              <span>{formatDateTime(s.finishedAt ?? s.createdAt)} · {set?.name ?? s.label ?? '문제집'}</span>
+              <span>{summary ? `제한 시간 안 ${summary.inLimitCorrect}/${summary.n} · 전체 ${summary.correct}/${summary.n}` : '문제집을 찾을 수 없습니다'}</span>
             </button>
           </li>;
         })}</ul>}
     </section>
     <section className={styles.section}>
-      <h2>외부 모의</h2>
-      {external.length === 0 ? <p className={styles.muted}>외부 모의 기록이 없습니다</p> :
+      <h2>외부 모의고사</h2>
+      {external.length === 0 ? <p className={styles.muted}>외부 모의고사 기록이 없습니다</p> :
         <ul className={styles.list}>{external.map(s => <li key={s.id}>
           <button className={styles.listButton} type="button" onClick={() => go({ name: 'externalSummary', sessionId: s.id })}>
             <span>{s.label ?? '외부 모의'}</span>

@@ -98,8 +98,8 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
 
   return <section ref={root} className={styles.section} aria-labelledby={`${id}-heading`}>
     <h2 id={`${id}-heading`}>유형 칠하기</h2>
-    <p className={styles.muted}>가족과 세부(선택)를 고르고 문항을 클릭하거나 드래그하세요. 같은 세트의 모든 풀이에 적용됩니다.</p>
-    <div className={styles.actions} aria-label="유형 가족">
+    <p className={styles.muted}>유형(세부 유형은 선택)을 고른 뒤 문항을 누르거나 끌어서 칠하세요. 같은 문제집을 푼 모든 기록에 함께 적용됩니다.</p>
+    <div className={styles.actions} aria-label="유형">
       {taxonomy?.families.map(family => <button key={family.id} type="button"
         onMouseDown={e => e.preventDefault()} aria-pressed={familyId === family.id} disabled={busy || readOnly}
         style={familyId === family.id ? { borderColor: 'var(--accent)', fontWeight: 700 } : undefined}
@@ -119,7 +119,7 @@ export function TypeTagger({ setId, views }: { setId: string; views: QuestionVie
         {leaves.map(leaf => <option key={leaf.id} value={leaf.id}>{leaf.name}</option>)}
       </select>
     </div>
-    {!familyId && <p className={styles.muted}>칠할 가족을 먼저 고르세요</p>}
+    {!familyId && <p className={styles.muted}>칠할 유형을 먼저 고르세요</p>}
     {set.profileId === 'dcat' && <div className={styles.actions}>
       <button type="button" onMouseDown={e => e.preventDefault()} disabled={busy || readOnly}
         onClick={() => { void persist(() => store.getState().saveTemplateFromSet(setId), '기본 틀을 저장했습니다'); }}>기본 틀로 저장</button>

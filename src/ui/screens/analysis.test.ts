@@ -42,13 +42,13 @@ describe('P4 분석 UI', () => {
     const t = await analysisFixture();
     try {
       const html = t.renderAnalysis();
-      const familyTable = html.match(/<table[^>]*aria-label="가족별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const familyTable = html.match(/<table[^>]*aria-label="유형별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       expect(html).toContain('0/6');
       expect(html).toContain('8%');
-      expect(familyTable).toContain('aria-label="가족별 분석"');
+      expect(familyTable).toContain('aria-label="유형별 성적"');
       const firstFamily = familyTable.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
       expect(firstFamily).toContain('전개도');
-      expect(html).toContain('시간 데이터 0/75문항');
+      expect(html).toContain('풀이 시간 기록 0/75문항');
       expect(html).toContain('초과 128%');
       expect(html).toContain('data-testid="scatter"');
       expect(html).toContain('data-testid="scatter-chance-line"');
@@ -57,8 +57,8 @@ describe('P4 분석 UI', () => {
       expect(html).toContain('data-testid="verdict-speed"');
       expect(html).toContain('data-testid="verdict-defer"');
       expect(html).toContain('data-testid="verdict-guess"');
-      expect(html).toContain('시간 데이터 없음');
-      expect(html).toContain('시간 교란 가능');
+      expect(html).toContain('풀이 시간 기록이 없어');
+      expect(html).toContain('시간 초과 기록 포함');
     } finally { await t.db.delete(); }
   });
 
@@ -78,19 +78,19 @@ describe('P4 분석 UI', () => {
     const t = await analysisFixture();
     try {
       const html = t.renderAnalysis();
-      expect(html).toMatch(/<label[^>]*>프로필/);
-      expect(html).toMatch(/<label[^>]*>출처/);
+      expect(html).toMatch(/<label[^>]*>시험/);
+      expect(html).toMatch(/<label[^>]*>기록 종류/);
       expect(html).toMatch(/<option value="all"[^>]*>전체<\/option>/);
-      expect(html).toContain('<option value="tool">도구</option>');
-      expect(html).toContain('<option value="import">가져오기</option>');
-      expect(html).toMatch(/<label[^>]*>조건/);
+      expect(html).toContain('<option value="tool">툴에서 푼 기록</option>');
+      expect(html).toContain('<option value="import">가져온 기록</option>');
+      expect(html).toMatch(/<label[^>]*>응시 방식/);
       for (const value of ['all', 'full', 'section', 'drill', 'external', 'external-overtime']) {
         expect(html).toContain(`value="${value}"`);
       }
-      expect(html).toMatch(/<label[^>]*>최근 N회/);
+      expect(html).toMatch(/<label[^>]*>기간/);
       for (const value of ['all', '1', '3', '5', '10']) expect(html).toContain(`value="${value}"`);
       expect(html).toMatch(/<input[^>]*checked=""[^>]*type="checkbox"|<input[^>]*type="checkbox"[^>]*checked=""/);
-      expect(html).toContain('첫 풀이만');
+      expect(html).toContain('처음 푼 기록만');
     } finally { await t.db.delete(); }
   });
 
@@ -100,11 +100,11 @@ describe('P4 분석 UI', () => {
       t.store.setState(state => ({ data: { ...state.data, imports: [] } }));
       const html = t.renderAnalysis();
       expect(html).toContain('분석할 기록이 없습니다');
-      const familyTable = html.match(/<table[^>]*aria-label="가족별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const familyTable = html.match(/<table[^>]*aria-label="유형별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       expect(familyTable).toContain('<tbody></tbody>');
-      expect(html).toContain('시간 데이터 0/0문항');
+      expect(html).toContain('풀이 시간 기록 0/0문항');
       expect(html).toContain('data-testid="scatter"');
-      expect(html).toContain('시간 데이터 없음');
+      expect(html).toContain('풀이 시간 기록이 없어');
     } finally { await t.db.delete(); }
   });
 
@@ -133,38 +133,38 @@ describe('P4 분석 UI', () => {
       t.store.setState(state => ({ data: { ...state.data, imports: [], sets: [set],
         sessions: [session, { ...session, id: 'timed-retry', attempt: 2 }] } }));
       const html = t.renderAnalysis();
-      expect(html).toContain('시간 데이터 4/20문항');
+      expect(html).toContain('풀이 시간 기록 4/20문항');
       const scatter = html.match(/<svg\b[^>]*>[\s\S]*?<\/svg>/)?.[0] ?? '';
       expect(scatter).toContain('<circle');
       expect(scatter).toContain('명제추리');
       const speed = html.match(/data-testid="verdict-speed"[^>]*>([\s\S]*?)<\/ul>/)?.[1] ?? '';
       expect(speed).toContain('명제추리');
-      expect(html).not.toContain('시간 데이터 없음');
-      const sectionTable = html.match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      expect(html).not.toContain('풀이 시간 기록이 없어');
+      const sectionTable = html.match(/<table[^>]*aria-label="영역별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       const firstSection = sectionTable.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
-      expect(firstSection).toMatch(/data-label="초과"[^>]*>1(?:\b|\/)/);
-      expect(firstSection).toMatch(/data-label="속도 손실"[^>]*>1(?:\b|\/)/);
+      expect(firstSection).toMatch(/data-label="시간 초과 답"[^>]*>1(?:\b|\/)/);
+      expect(firstSection).toMatch(/data-label="시간 부족으로 놓친 점수"[^>]*>1(?:\b|\/)/);
       // An earlier hard-policy record must not suppress the later soft-policy loss.
       const hard: Session = { ...session, id: 'timed-hard', policy: 'hard',
         events: session.events.map(event => ({ ...event, t: Math.min(event.t, 360_000) })) };
       t.store.setState(state => ({ data: { ...state.data, sessions: [hard, session] } }));
-      const mixed = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const mixed = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       const mixedSection = mixed.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
-      expect(mixedSection).toMatch(/data-label="속도 손실"[^>]*>1(?:\b|\/)/);
+      expect(mixedSection).toMatch(/data-label="시간 부족으로 놓친 점수"[^>]*>1(?:\b|\/)/);
       t.store.setState(state => ({ data: { ...state.data, imports: [buildSeedImport(1_000_000)] } }));
       const withImport = t.renderAnalysis();
-      const importedSections = withImport.match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const importedSections = withImport.match(/<table[^>]*aria-label="영역별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       const importedFirst = importedSections.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
       expect(importedFirst).toMatch(/data-label="미응답"[^>]*>32(?:\b|\/)/);
-      expect(importedFirst).toContain('응답 데이터 40/60');
+      expect(importedFirst).toContain('응답 기록 40문항 기준');
       expect(withImport).toContain('1:40'); // The soft record used 100 seconds past its deadline.
       t.store.setState(state => ({ data: { ...state.data, imports: [], sessions: [{
         ...session, mode: 'external', externalAnswers: Array(75).fill(1),
       }] } }));
-      const externalSections = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 분석"[\s\S]*?<\/table>/)?.[0] ?? '';
+      const externalSections = t.renderAnalysis().match(/<table[^>]*aria-label="영역별 성적"[\s\S]*?<\/table>/)?.[0] ?? '';
       const externalFirst = externalSections.match(/<tbody>\s*(<tr\b[^>]*>[\s\S]*?<\/tr>)/)?.[1] ?? '';
-      expect(externalFirst).toMatch(/data-label="초과"[^>]*>—/);
-      expect(externalFirst).toMatch(/data-label="속도 손실"[^>]*>—/);
+      expect(externalFirst).toMatch(/data-label="시간 초과 답"[^>]*>기록 없음/);
+      expect(externalFirst).toMatch(/data-label="시간 부족으로 놓친 점수"[^>]*>기록 없음/);
     } finally { await t.db.delete(); }
   });
 });

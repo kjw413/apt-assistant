@@ -66,7 +66,7 @@ test('ShareX 파일 선택으로 캡처를 연결하고 문항 시간과 이미�
     await expect(page.getByRole('dialog').getByRole('img')).toHaveJSProperty('naturalWidth', 1);
     await page.getByRole('dialog').getByRole('button', { name: '닫기' }).click();
     await page.reload();
-    await page.getByRole('button', { name: /시간 내 3\/3 · 전체 3\/3/ }).click();
+    await page.getByRole('button', { name: /제한 시간 안 3\/3 · 전체 3\/3/ }).click();
     await page.getByText('문항별 결과', { exact: true }).click();
     await expect(page.getByTestId('question-time-0')).toHaveText('10');
     await page.getByRole('table', { name: '문항별 결과' }).getByRole('button', { name: '보기' }).first().click();

@@ -49,28 +49,28 @@ export function Result({ sessionId }: { sessionId: string }) {
     <p className={styles.muted}>{formatDateTime(session.finishedAt ?? session.createdAt)}</p>
     <CaptureLinker key={session.id} session={session} views={views} />
     <div className={styles.scoreCards}>
-      <div className={styles.scoreCard}><span>시간 내 점수</span><strong data-testid="score-inlimit">{summary.inLimitCorrect}/{summary.n}</strong></div>
+      <div className={styles.scoreCard}><span>제한 시간 안 점수</span><strong data-testid="score-inlimit">{summary.inLimitCorrect}/{summary.n}</strong></div>
       <div className={styles.scoreCard}><span>전체 점수</span><strong data-testid="score-total">{summary.correct}/{summary.n}</strong></div>
     </div>
     <dl className={styles.metrics}>
-      <div><dt>사용 / 제한</dt><dd>{formatSec(summary.usedSec)} / {formatSec(summary.limitSec)}</dd></div>
-      <div><dt>초과 합계</dt><dd>{formatSec(summary.overtimeSec)}</dd></div>
+      <div><dt>걸린 시간 / 제한 시간</dt><dd>{formatSec(summary.usedSec)} / {formatSec(summary.limitSec)}</dd></div>
+      <div><dt>시간 초과</dt><dd>{formatSec(summary.overtimeSec)}</dd></div>
       <div><dt>미응답</dt><dd>{summary.unanswered}</dd></div>
-      {summary.guessed > 0 && <div><dt>찍음</dt><dd>{summary.guessed} (맞음 {summary.guessedCorrect} / 틀림 {guessedWrong}){guessedExcluded > 0 && ` · 채점 제외 ${guessedExcluded}`}</dd></div>}
+      {summary.guessed > 0 && <div><dt>찍음</dt><dd>{summary.guessed} (맞음 {summary.guessedCorrect} / 틀림 {guessedWrong}){guessedExcluded > 0 && ` · 정답 모름 ${guessedExcluded}`}</dd></div>}
     </dl>
-    {summary.graded < summary.n && <p className={styles.notice}>채점 제외 {summary.n - summary.graded}</p>}
-    {summary.unseenSections > 0 && <p className={styles.notice}>미응시 영역 {summary.unseenSections}</p>}
+    {summary.graded < summary.n && <p className={styles.notice}>정답을 모르는 {summary.n - summary.graded}문항은 채점에서 뺐습니다</p>}
+    {summary.unseenSections > 0 && <p className={styles.notice}>시작하지 않은 영역 {summary.unseenSections}개는 점수에서 뺐습니다</p>}
     <section className={styles.section}>
       <h2>영역별 결과</h2>
       <table className={`${styles.table} ${styles.sectionTable}`}>
-        <thead><tr><th scope="col">영역</th><th scope="col">정답/문항</th><th scope="col">정답률</th><th scope="col">시간 내 정답</th><th scope="col">사용/제한</th><th scope="col">중앙값 초 / 페이스</th><th scope="col">미응답</th>{summary.guessed > 0 && <th scope="col">찍음</th>}<th scope="col">초과</th></tr></thead>
+        <thead><tr><th scope="col">영역</th><th scope="col">정답/문항</th><th scope="col">정답률</th><th scope="col">제한 시간 안 정답</th><th scope="col">걸린 시간 / 제한</th><th scope="col">중앙값 초 / 페이스</th><th scope="col">미응답</th>{summary.guessed > 0 && <th scope="col">찍음</th>}<th scope="col">초과</th></tr></thead>
         <tbody>{summary.sections.map(part => <tr key={part.idx}>
           <th scope="row">{part.name}{!part.started && <span className={styles.muted}> · 미응시</span>}</th>
           <td data-label="정답/문항">{part.started ? `${part.correct}/${part.n}` : '—'}</td>
           <td data-label="정답률">{part.started && part.n > 0 ? `${Math.round(part.correct / part.n * 100)}%` : '—'}</td>
-          <td data-label="시간 내 정답">{part.started ? `${part.inLimitCorrect}/${part.n}` : '—'}</td>
-          <td data-label="사용/제한">{part.started ? formatSec(part.usedSec) : '—'} / {formatSec(part.limitSec)}</td>
-          <td data-label="중앙값 / 페이스">{seconds(part.medianLapSec)} / {seconds(part.paceSec)}</td>
+          <td data-label="제한 시간 안 정답">{part.started ? `${part.inLimitCorrect}/${part.n}` : '—'}</td>
+          <td data-label="걸린 시간 / 제한">{part.started ? formatSec(part.usedSec) : '—'} / {formatSec(part.limitSec)}</td>
+          <td data-label="문항당 시간 / 기준">{seconds(part.medianLapSec)} / {seconds(part.paceSec)}</td>
           <td data-label="미응답">{part.started ? part.unanswered : '—'}</td>
           {summary.guessed > 0 && <td data-label="찍음">{part.started ? part.guessed : '—'}</td>}
           <td data-label="초과">{part.started ? formatSec(part.overtimeSec) : '—'}</td>

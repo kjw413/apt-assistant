@@ -69,7 +69,7 @@ export function Setup() {
       <h1>새 세션</h1>
       <fieldset className={styles.fields} disabled={starting}>
         <div className={styles.field}>
-          <label htmlFor={`${id}-profile`}>프로필</label>
+          <label htmlFor={`${id}-profile`}>시험</label>
           <select id={`${id}-profile`} value={profile.id} onChange={e => {
             setValues(current => ({ ...current, profileId: e.target.value, sectionIdx: current.scope === 'section' ? 0 : null, setId: '' }));
             setEditing(false);
@@ -86,10 +86,10 @@ export function Setup() {
             setErrors({});
             setStartError('');
           }}>
-            <option value="full">전체 모의</option>
-            <option value="section">영역 하나</option>
+            <option value="full">전체 모의고사</option>
+            <option value="section">영역 하나만</option>
             <option value="drill">자유 드릴</option>
-            <option value="external">외부 모의</option>
+            <option value="external">외부 모의고사(타이머·도구만)</option>
           </select>
         </div>
         {(values.scope === 'section' || drill) && (

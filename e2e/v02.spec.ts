@@ -50,7 +50,7 @@ test('외부 DCAT 채점 뒤 유형을 칠하고 다시 열어도 저장된다',
     await expect(page.getByTestId('tag-row-2')).toContainText('명제추리');
 
     await page.reload();
-    await page.getByRole('button', { name: /시간 내 75\/75 · 전체 75\/75/ }).click();
+    await page.getByRole('button', { name: /제한 시간 안 75\/75 · 전체 75\/75/ }).click();
     await expect(page.getByTestId('tag-row-0')).toContainText('단문독해');
     await expect(page.getByTestId('tag-row-1')).toContainText('단문독해');
     await expect(page.getByTestId('tag-row-2')).toContainText('명제추리');
@@ -120,7 +120,7 @@ test('DCAT 기본 틀을 저장하고 적용하며 LG에는 기본 틀이 없다
 
     await page.getByRole('button', { name: '홈으로', exact: true }).click();
     await page.getByRole('button', { name: '새 세션' }).click();
-    await page.getByLabel('프로필').selectOption('lg-wayfit');
+    await page.getByLabel('시험').selectOption('lg-wayfit');
     await page.getByLabel('범위').selectOption('full');
     await page.getByLabel('모드').selectOption('soft');
     await page.getByRole('button', { name: '시작', exact: true }).click();
@@ -145,7 +145,7 @@ test('첫 부팅 분석은 시드 가족별 약점과 필터·세부 위치를 �
     await page.goto(APP_URL);
     await page.getByRole('button', { name: '분석', exact: true }).click();
 
-    const familyTable = page.getByRole('table', { name: '가족별 분석' });
+    const familyTable = page.getByRole('table', { name: '유형별 성적' });
     await expect(familyTable).toBeVisible();
     await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
     await expect(familyTable).toContainText('0/6');
@@ -165,19 +165,19 @@ test('첫 부팅 분석은 시드 가족별 약점과 필터·세부 위치를 �
     await expect(rows.nth(1)).toContainText('59');
     await expect(familyTable.locator('tbody > tr')).toHaveCount(14);
 
-    await page.getByLabel('프로필').selectOption('lg-wayfit');
+    await page.getByLabel('시험').selectOption('lg-wayfit');
     await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
-    await page.getByLabel('프로필').selectOption('dcat');
-    await page.getByLabel('출처').selectOption('tool');
+    await page.getByLabel('시험').selectOption('dcat');
+    await page.getByLabel('기록 종류').selectOption('tool');
     await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
-    await page.getByLabel('출처').selectOption('import');
+    await page.getByLabel('기록 종류').selectOption('import');
     await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
-    await page.getByLabel('조건').selectOption('external');
+    await page.getByLabel('응시 방식').selectOption('external');
     await expect(familyTable.locator('tbody > tr')).toHaveCount(0);
-    await page.getByLabel('조건').selectOption('external-overtime');
+    await page.getByLabel('응시 방식').selectOption('external-overtime');
     await expect(familyTable.locator('tbody > tr').first()).toContainText('전개도');
-    await expect(page.getByLabel('최근 N회')).toHaveValue('all');
-    await expect(page.getByLabel('첫 풀이만')).toBeChecked();
+    await expect(page.getByLabel('기간')).toHaveValue('all');
+    await expect(page.getByLabel('처음 푼 기록만')).toBeChecked();
   } finally {
     await ctx.close();
   }

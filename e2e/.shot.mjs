@@ -1,0 +1,11 @@
+import { chromium } from '@playwright/test';
+import path from 'node:path'; import fs from 'node:fs'; import { pathToFileURL } from 'node:url';
+const out = process.argv[2]; const name = process.argv[3] ?? 'analysis';
+const dir = path.resolve('e2e/.profile-test/shot2'); fs.rmSync(dir, { recursive: true, force: true });
+const ctx = await chromium.launchPersistentContext(dir, { channel: 'chrome', headless: true, viewport: { width: 480, height: 900 } });
+const page = ctx.pages()[0];
+await page.goto(pathToFileURL(path.resolve('dist/index.html')).href);
+await page.getByRole('button', { name: '분석', exact: true }).click();
+await page.getByRole('button', { name: /전개도/ }).click();
+await page.screenshot({ path: `${out}/${name}.png`, fullPage: true });
+await ctx.close();

@@ -18,7 +18,7 @@ export function ExternalSummary({ sessionId }: { sessionId: string }) {
     <p>{session.label ?? '외부 모의'}</p>
     <p className={styles.muted}>{formatDateTime(session.finishedAt ?? session.createdAt)}</p>
     <table className={styles.table}>
-      <thead><tr><th scope="col">영역</th><th scope="col">사용/제한</th><th scope="col">초과</th></tr></thead>
+      <thead><tr><th scope="col">영역</th><th scope="col">걸린 시간 / 제한</th><th scope="col">초과</th></tr></thead>
       <tbody>{summary.sections.map(section => <tr key={section.idx}>
         <th scope="row">{section.name}{!section.started && <span className={styles.muted}> · 미응시</span>}</th>
         <td>{section.started ? formatSec(section.usedSec) : '—'} / {formatSec(section.limitSec)}</td>
